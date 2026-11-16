@@ -1,0 +1,15 @@
+# The frontend is deployed separately on Netlify.
+services:
+  - type: web
+    name: iron-table-server
+    runtime: go
+    plan: free
+    rootDir: server
+    buildCommand: go build -tags netgo -ldflags '-s -w' -o app .
+    startCommand: ./app
+    healthCheckPath: /health
+    # Match state is in memory. Keep exactly one instance.
+    numInstances: 1
+    envVars:
+      - key: ALLOWED_ORIGINS
+        sync: false

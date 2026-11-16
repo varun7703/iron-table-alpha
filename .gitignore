@@ -1,0 +1,11 @@
+.tools/
+node_modules/
+dist/
+data/
+*.exe
+*.log
+.env
+.env.local
+.env.*.local
+.netlify/
+server/app

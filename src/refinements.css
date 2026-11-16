@@ -1,0 +1,6 @@
+/* Keep the map readable even in short preview windows. */
+.map{max-height:none;min-height:420px;height:auto;aspect-ratio:880/640}
+.territory-name{font-size:15px;stroke-width:2px}
+.map-wrap{min-height:420px}
+@media(min-width:1600px){.map{max-height:none}}
+@media(max-width:600px){.map{min-height:290px}.map-wrap{min-height:290px}}
