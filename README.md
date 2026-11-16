@@ -15,9 +15,11 @@ For frontend development, run `npm run dev` alongside the Go server. Vite proxie
 Create a room, invite another player or add bot commanders, and start. Server dice determine draft order. Claim territories in repeating A → B → C → D order. Each claimed territory starts with four infantry.
 
 - **Plan (90s):** select an army and an adjacent destination. Move/attack or, for artillery, bombard. Hold/defend is available. Lock when done; everyone ready ends the phase early.
-- **Simulate (12s):** all orders resolve and the full map is revealed. The map animates event arrows and displays battle dispatches.
-- **Gather (60s):** territory income is credited at entry. Recruit, reinforce, merge matching unfed armies, and allocate rations. Unfed armies receive automatic normal/minimum rations on lock when affordable. Everyone ready advances the round.
+- **Simulate (up to 12s):** all orders resolve and the full map is revealed. A playback progress bar reveals field dispatches and highlights the current engagement. All active commanders can lock in to skip the remaining playback.
+- **Gather (no time limit):** territory income is credited at entry. Recruit, reinforce, merge matching unfed armies, and allocate rations. Unfed armies receive automatic normal/minimum rations on lock when affordable. Every active commander must lock in to advance the round; there is no Gather deadline.
 - Most territories after 12 rounds wins; ties are shared. Owning the whole map also ends the campaign.
+
+Lock-in buttons and the active commander readiness count appear beside the timer in the sticky top bar. Eliminated commanders (no territory and no surviving armies) do not count toward phase readiness. Plan retains its 90-second limit but advances immediately when all active commanders lock in.
 
 ## Alpha rule defaults
 

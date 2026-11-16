@@ -17,14 +17,15 @@ type Resources struct {
 	Currency int `json:"currency"`
 }
 type Player struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Color     string    `json:"color"`
-	Roll      int       `json:"roll"`
-	Ready     bool      `json:"ready"`
-	Bot       bool      `json:"bot"`
-	Resources Resources `json:"resources"`
-	Token     string    `json:"-"`
+	Eliminated bool      `json:"eliminated"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Color      string    `json:"color"`
+	Roll       int       `json:"roll"`
+	Ready      bool      `json:"ready"`
+	Bot        bool      `json:"bot"`
+	Resources  Resources `json:"resources"`
+	Token      string    `json:"-"`
 }
 type Territory struct {
 	ID        int     `json:"id"`
@@ -182,7 +183,10 @@ func (g *Game) addPlayer(name string, bot bool) *Player {
 }
 func (g *Game) setPhase(p string, seconds int) {
 	g.Phase = p
-	g.Deadline = time.Now().Add(time.Duration(seconds) * time.Second).UnixMilli()
+	g.Deadline = 0
+	if seconds > 0 {
+		g.Deadline = time.Now().Add(time.Duration(seconds) * time.Second).UnixMilli()
+	}
 	for _, pl := range g.Players {
 		pl.Ready = pl.Bot
 	}
@@ -278,7 +282,7 @@ func (g *Game) command(id string, c Command) error {
 		return nil
 	}
 	if c.Action == "ready" {
-		if g.Phase != "plan" && g.Phase != "gather" {
+		if g.Phase != "plan" && g.Phase != "gather" && g.Phase != "simulate" {
 			return bad("This phase cannot be locked")
 		}
 		if g.Phase == "gather" {
@@ -413,7 +417,23 @@ func (g *Game) draftOne() {
 }
 func (g *Game) allReady() bool {
 	for _, p := range g.Players {
-		if !p.Ready {
+		if !g.eliminated(p.ID) && !p.Ready {
+			return false
+		}
+	}
+	return true
+}
+func (g *Game) eliminated(id string) bool {
+	if g.Phase == "lobby" || g.Phase == "draft" {
+		return false
+	}
+	for _, t := range g.Territories {
+		if t.Owner == id {
+			return false
+		}
+	}
+	for _, u := range g.Units {
+		if u.Owner == id && u.Count > 0 {
 			return false
 		}
 	}
@@ -445,7 +465,7 @@ func (g *Game) advance() {
 		g.resolve()
 		g.setPhase("simulate", 12)
 	case "simulate":
-		g.setPhase("gather", 60)
+		g.setPhase("gather", 0)
 		for _, t := range g.Territories {
 			p := g.player(t.Owner)
 			if p == nil {
@@ -512,6 +532,10 @@ func (g *Game) finish() {
 	g.Winner = fmt.Sprintf("%v · %d territories", winners, best)
 }
 func (g *Game) tick() {
+	if (g.Phase == "plan" || g.Phase == "gather" || g.Phase == "simulate") && g.allReady() {
+		g.advance()
+		return
+	}
 	if g.Deadline > 0 && time.Now().UnixMilli() >= g.Deadline {
 		if g.Phase == "draft" {
 			g.draftOne()

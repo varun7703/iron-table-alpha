@@ -51,6 +51,7 @@ func (g *Game) view(id string) map[string]any {
 	ps := []Player{}
 	for _, p := range g.Players {
 		cp := *p
+		cp.Eliminated = g.eliminated(p.ID)
 		if p.ID != id {
 			cp.Resources = Resources{}
 		}
