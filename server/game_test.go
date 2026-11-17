@@ -116,7 +116,7 @@ func TestArtilleryRangedAndRecruitment(t *testing.T) {
 	g.Phase = "gather"
 	before := a.Resources
 	g.command(a.ID, Command{Action: "recruit", Type: "tank", Count: 2, Target: 0})
-	if a.Resources.Humans != before.Humans-2 || a.Resources.Iron != before.Iron-32 || a.Resources.Currency != before.Currency-8 {
+	if a.Resources.Humans != before.Humans-2 || a.Resources.Iron != before.Iron-16 || a.Resources.Currency != before.Currency-8 {
 		t.Fatal("Incorrect tank cost")
 	}
 }
@@ -127,6 +127,9 @@ func TestDraftAndPhaseCycle(t *testing.T) {
 	if e := g.command(a.ID, Command{Action: "start"}); e != nil {
 		t.Fatal(e)
 	}
+	for g.Phase == "roll" {
+		g.rollNext()
+	}
 	for g.Phase == "draft" {
 		g.draftOne()
 		g.autoDraft()
@@ -136,8 +139,14 @@ func TestDraftAndPhaseCycle(t *testing.T) {
 		counts[tr.Owner]++
 	}
 	for _, p := range g.Players {
-		if counts[p.ID] != 12 {
+		if counts[p.ID] != 4 {
 			t.Fatal("Draft unbalanced")
+		}
+	}
+	for _, tr := range g.Territories {
+		if tr.Owner == a.ID {
+			g.chooseCapital(a.ID, tr.ID)
+			break
 		}
 	}
 	g.advance()
@@ -187,7 +196,7 @@ func TestBorderCrossingAndFullCampaign(t *testing.T) {
 		}
 		g.Phase = "draft"
 		g.autoDraft()
-		for step := 0; step < 40 && g.Phase != "finished"; step++ {
+		for step := 0; step < 65 && g.Phase != "finished"; step++ {
 			g.advance()
 			for _, u := range g.Units {
 				if u.Count <= 0 || u.Health <= 0 || u.Health > 100 || g.Territories[u.Territory].Owner != u.Owner {

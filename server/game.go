@@ -17,6 +17,7 @@ type Resources struct {
 	Currency int `json:"currency"`
 }
 type Player struct {
+	Capital    int       `json:"capital"`
 	Eliminated bool      `json:"eliminated"`
 	ID         string    `json:"id"`
 	Name       string    `json:"name"`
@@ -28,6 +29,7 @@ type Player struct {
 	Token      string    `json:"-"`
 }
 type Territory struct {
+	Neutral   bool    `json:"neutral"`
 	ID        int     `json:"id"`
 	Name      string  `json:"name"`
 	Owner     string  `json:"owner"`
@@ -62,6 +64,7 @@ type Event struct {
 	Kind string `json:"kind"`
 }
 type Game struct {
+	RollIndex   int              `json:"rollIndex"`
 	Timeline    []BattleFrame    `json:"timeline"`
 	Code        string           `json:"code"`
 	Host        string           `json:"host"`
@@ -175,7 +178,7 @@ func (g *Game) unit(id string) *Unit {
 	return nil
 }
 func (g *Game) addPlayer(name string, bot bool) *Player {
-	p := &Player{ID: uid(), Token: uid(), Name: name, Color: colors[len(g.Players)], Bot: bot, Resources: Resources{40, 120, 40, 160}}
+	p := &Player{Capital: -1, ID: uid(), Token: uid(), Name: name, Color: colors[len(g.Players)], Bot: bot, Resources: Resources{40, 120, 40, 160}}
 	g.Players = append(g.Players, p)
 	if g.Host == "" {
 		g.Host = p.ID
@@ -215,9 +218,9 @@ func rate(t string) int {
 func cost(t string, n int) Resources {
 	switch t {
 	case "tank":
-		return Resources{n, n, 16 * n, 4 * n}
+		return Resources{n, n, 8 * n, 4 * n}
 	case "artillery":
-		return Resources{n, n, 8 * n, 2 * n}
+		return Resources{n, n, 4 * n, 2 * n}
 	}
 	return Resources{n, n, 0, 4 * n}
 }
@@ -258,18 +261,11 @@ func (g *Game) command(id string, c Command) error {
 		if g.Phase != "lobby" || id != g.Host || len(g.Players) < 2 {
 			return bad("Host needs at least two commanders")
 		}
-		rolled := map[int]bool{}
-		for _, p := range g.Players {
-			p.Roll = 1 + rng.IntN(6)
-			for rolled[p.Roll] {
-				p.Roll = 1 + rng.IntN(6)
-			}
-			rolled[p.Roll] = true
-		}
-		sort.SliceStable(g.Players, func(i, j int) bool { return g.Players[i].Roll > g.Players[j].Roll })
-		g.setPhase("draft", 25)
-		g.autoDraft()
+		g.setPhase("roll", 2)
 		return nil
+	}
+	if c.Action == "capital" {
+		return g.chooseCapital(id, c.Target)
 	}
 	if c.Action == "claim" {
 		if g.Phase != "draft" || g.Players[g.Draft%len(g.Players)].ID != id {
@@ -392,12 +388,8 @@ func (g *Game) claim(t int, id string) {
 	g.Territories[t].Owner = id
 	g.Draft++
 	g.Deadline = time.Now().Add(25 * time.Second).UnixMilli()
-	if g.Draft == len(g.Territories) {
-		for _, t := range g.Territories {
-			g.Units = append(g.Units, &Unit{uid(), t.Owner, "infantry", t.ID, 4, 100, 1, false})
-		}
-		g.Round = 1
-		g.setPhase("plan", 90)
+	if g.Draft == 4*len(g.Players) {
+		g.beginCapitals()
 	}
 }
 func (g *Game) autoDraft() {
@@ -425,7 +417,7 @@ func (g *Game) allReady() bool {
 	return true
 }
 func (g *Game) eliminated(id string) bool {
-	if g.Phase == "lobby" || g.Phase == "draft" {
+	if g.Phase == "lobby" || g.Phase == "draft" || g.Phase == "roll" || g.Phase == "capital" {
 		return false
 	}
 	for _, t := range g.Territories {
@@ -492,7 +484,7 @@ func (g *Game) advance() {
 		for _, p := range g.Players {
 			g.autoFeed(p)
 		}
-		if g.Round >= 12 || g.singleOwner() {
+		if g.Round >= 20 || g.singleOwner() {
 			g.finish()
 		} else {
 			g.Round++
@@ -538,7 +530,9 @@ func (g *Game) tick() {
 		return
 	}
 	if g.Deadline > 0 && time.Now().UnixMilli() >= g.Deadline {
-		if g.Phase == "draft" {
+		if g.Phase == "roll" {
+			g.rollNext()
+		} else if g.Phase == "draft" {
 			g.draftOne()
 			g.autoDraft()
 		} else if g.Phase != "finished" {

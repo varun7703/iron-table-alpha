@@ -10,9 +10,10 @@ class Commander {
 const a=new Commander(),b=new Commander();let reconnect;
 try{
  await Promise.all([a.connect(),b.connect()]);await a.command('create',{name:'Network Alpha'});await b.command('join',{name:'Network Bravo',code:a.session.code});await a.wait(()=>a.game.players.length===2);assert.equal(b.game.players.length,2);
- await a.command('start');await b.wait(()=>b.game.phase==='draft');
- for(let i=0;i<24;i++){const current=a.game.turn===a.session.player?a:b;await current.wait(()=>current.game.phase==='draft');const t=current.game.territories.find(t=>!t.owner);await current.command('claim',{target:t.id});await Promise.all([a.wait(()=>a.game.phase!=='draft'||a.game.turn!==current.session.player),b.wait(()=>b.game.phase!=='draft'||b.game.turn!==current.session.player)])}
- await Promise.all([a.wait(()=>a.game.phase==='plan'),b.wait(()=>b.game.phase==='plan')]);assert(a.game.units.every(u=>u.owner===a.session.player));assert(b.game.units.every(u=>u.owner===b.session.player));assert.equal(a.game.units.length,12);
+ await a.command('start');await b.wait(()=>b.game.phase==='draft',15000);
+ for(let i=0;i<8;i++){const current=a.game.turn===a.session.player?a:b;await current.wait(()=>current.game.phase==='draft');const t=current.game.territories.find(t=>!t.owner);await current.command('claim',{target:t.id});await Promise.all([a.wait(()=>a.game.phase!=='draft'||a.game.turn!==current.session.player),b.wait(()=>b.game.phase!=='draft'||b.game.turn!==current.session.player)])}
+ await Promise.all([a.wait(()=>a.game.phase==='capital'),b.wait(()=>b.game.phase==='capital')]);for(const p of [a,b]){const tile=p.game.territories.find(t=>t.owner===p.session.player);await p.command('capital',{target:tile.id})}
+ await Promise.all([a.wait(()=>a.game.phase==='plan'),b.wait(()=>b.game.phase==='plan')]);assert(a.game.units.every(u=>u.owner===a.session.player));assert(b.game.units.every(u=>u.owner===b.session.player));assert.equal(a.game.units.length,4);
  const u=a.game.units[0],target=a.game.territories[u.territory].neighbors[0],before=a.game.players.find(p=>p.id===a.session.player).resources.currency;
  await a.command('order',{unit:u.id,kind:'move',target});assert.equal(a.game.reserved,4);assert.equal(Object.keys(b.game.orders).length,0);
  await assert.rejects(()=>b.command('order',{unit:u.id,kind:'move',target}),/own army/);
@@ -21,5 +22,5 @@ try{
  const duplicateID=crypto.randomUUID(),body=JSON.stringify({id:duplicateID,action:'recruit',type:'artillery',count:1,target:territory.id});const count=a.game.units.length;a.ws.send(body);await a.wait(()=>a.messages.some(m=>m.id===duplicateID));a.ws.send(body);await new Promise(r=>setTimeout(r,150));assert.equal(a.game.units.length,count+1);
  reconnect=new Commander();await reconnect.connect();await reconnect.command('resume',{code:a.session.code,token:a.session.token});assert.equal(reconnect.session.player,a.session.player);assert.equal(reconnect.game.phase,'gather');assert(reconnect.game.units.every(u=>u.owner===a.session.player));
  await reconnect.command('ready');await b.command('ready');await reconnect.wait(()=>reconnect.game.phase==='plan'&&reconnect.game.round===2);
- console.log('PASS: two-player lobby, 24-pick draft, private orders, ownership validation, simultaneous simulation, currency charge, gather production, recruitment, food, duplicate command protection, reconnect, and round progression.');
+ console.log('PASS: two-player lobby, 8-pick draft and capital selection, private orders, ownership validation, simultaneous simulation, currency charge, gather production, recruitment, food, duplicate command protection, reconnect, and round progression.');
 }finally{a.close();b.close();reconnect?.close()}

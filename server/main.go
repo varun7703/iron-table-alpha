@@ -29,11 +29,12 @@ type hub struct {
 }
 
 func (g *Game) view(id string) map[string]any {
-	public := g.Phase == "simulate" || g.Phase == "draft" || g.Phase == "lobby" || g.Phase == "finished"
+	public := g.Phase == "simulate" || g.Phase == "draft" || g.Phase == "lobby" || g.Phase == "roll" || g.Phase == "capital" || g.Phase == "finished"
 	ts := make([]Territory, len(g.Territories))
 	copy(ts, g.Territories)
 	for i := range ts {
-		if !public && ts[i].Owner != id {
+		ts[i].Neutral = ts[i].Owner == ""
+		if !public && ts[i].Owner != id && ts[i].Owner != "" {
 			ts[i].Resource = ""
 			ts[i].Yield = 0
 			ts[i].Humans = 0
@@ -76,7 +77,7 @@ func (g *Game) view(id string) map[string]any {
 	if g.Phase == "draft" {
 		turn = g.Players[g.Draft%len(g.Players)].ID
 	}
-	return map[string]any{"timeline": timeline, "simulationDuration": max(12, len(g.Timeline)*3) * 1000, "code": g.Code, "host": g.Host, "phase": g.Phase, "round": g.Round, "deadline": g.Deadline, "players": ps, "territories": ts, "units": us, "orders": orders, "events": events, "turn": turn, "winner": g.Winner, "reserved": g.reserved(id, "")}
+	return map[string]any{"rollIndex": g.RollIndex, "timeline": timeline, "simulationDuration": max(12, len(g.Timeline)*3) * 1000, "code": g.Code, "host": g.Host, "phase": g.Phase, "round": g.Round, "deadline": g.Deadline, "players": ps, "territories": ts, "units": us, "orders": orders, "events": events, "turn": turn, "winner": g.Winner, "reserved": g.reserved(id, "")}
 }
 func (h *hub) send(c *client, v any) {
 	select {
@@ -243,9 +244,9 @@ func main() {
 		for range ticker.C {
 			h.mu.Lock()
 			for _, g := range h.games {
-				phase, draft := g.Phase, g.Draft
+				phase, draft, roll := g.Phase, g.Draft, g.RollIndex
 				g.tick()
-				if g.Phase != phase || g.Draft != draft {
+				if g.Phase != phase || g.Draft != draft || g.RollIndex != roll {
 					h.broadcast(g)
 				}
 			}

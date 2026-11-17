@@ -6,7 +6,7 @@ func TestUpdatedEquipmentCosts(t *testing.T) {
 	for _, tc := range []struct {
 		kind           string
 		currency, iron int
-	}{{"artillery", 2, 8}, {"tank", 4, 16}, {"infantry", 4, 0}} {
+	}{{"artillery", 2, 4}, {"tank", 4, 8}, {"infantry", 4, 0}} {
 		c := cost(tc.kind, 3)
 		if c.Humans != 3 || c.Currency != tc.currency*3 || c.Iron != tc.iron*3 {
 			t.Fatalf("Wrong %s cost: %+v", tc.kind, c)
