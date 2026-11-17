@@ -31,8 +31,8 @@ These fill decisions that were still open in the design conversation; they are a
 | Production | Each sector yields 3 humans + 8 currency and fixed-at-match-start random 6–12 food or iron |
 | Starting stock | 40 humans / 120 food / 40 iron / 160 currency |
 | Infantry | 1 human + 4 currency per troop |
-| Artillery | 1 human + 8 currency + 2 iron per piece |
-| Tank | 1 human + 16 currency + 4 iron per piece |
+| Artillery | 1 human + 2 currency + 8 iron per piece |
+| Tank | 1 human + 4 currency + 16 iron per piece |
 | Movement | One adjacent territory; currency cost per troop/piece is infantry 1, artillery 2, tank 3 |
 | Artillery | Adjacent bombardment, no movement that round, cannot capture at range |
 | Normal food | 1 food per troop/piece |
@@ -43,7 +43,7 @@ These fill decisions that were still open in the design conversation; they are a
 | Reinforcement | Same resource cost per added troop/piece as recruitment; preserves stack health |
 | Captured production | Available in the immediately following Gather |
 
-Recruitment currency establishes the 4 infantry ≈ 2 artillery ≈ 1 tank ratio; humans and iron are additional distinct costs. This ratio is not a promise of equal combat strength.
+Artillery and tank recruitment now emphasize iron: artillery costs 2 currency + 8 iron and tanks cost 4 currency + 16 iron, plus one human each. This replaces the earlier currency-based 4:2:1 cost target.
 
 Combat is deterministic for the alpha: troop count × base attack × health fraction × ration modifier × matchup. Base attack is infantry 2, tank 7, ranged artillery 4, direct artillery 1. Tanks receive ×1.4 against infantry; infantry/tanks receive ×1.5 against artillery; ranged artillery receives ×1.5 against infantry and ×0.7 against tanks. Damage is applied simultaneously within each encounter; each 10 damage kills one troop and damage also reduces stack health. Border-crossing opponents clash and hold their origins. Ranged fire resolves first, then border clashes, movements, and destination battles. Destination losers retreat after all ownership resolves, or are removed if no friendly neighboring destination exists. Tied forces retreat and ownership stays unchanged.
 
@@ -109,3 +109,7 @@ The `VITE_GAME_SERVER_URL` value is included at frontend build time. If it chang
 ### Alpha hosting limits
 
 Restarting, redeploying, or replacing the backend loses active matches because persistence is not implemented. Free Render web services can spin down after inactivity; the first connection may need time to wake the backend. The client retries with backoff. Use a paid always-on instance when uninterrupted sessions matter, but in-memory matches still reset on backend replacement. No paid plan is required by this repository's configuration.
+
+## Combat inspector and replay
+
+Army cards show current direct combat strength, matchup values, and separate ranged values for artillery. Health, troop count, and ration changes update these values immediately. During Simulate, the map and battle inspector use immutable server snapshots in resolution order: initial armies, simultaneous bombardment, simultaneous border clashes, movement, individual territory resolutions, then retreats/final ownership. Playback lasts at least 12 seconds, with three seconds per snapshot, and can still be skipped by all active commanders locking in. Hidden phases never transmit replay snapshots.

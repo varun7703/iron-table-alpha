@@ -116,7 +116,7 @@ func TestArtilleryRangedAndRecruitment(t *testing.T) {
 	g.Phase = "gather"
 	before := a.Resources
 	g.command(a.ID, Command{Action: "recruit", Type: "tank", Count: 2, Target: 0})
-	if a.Resources.Humans != before.Humans-2 || a.Resources.Iron != before.Iron-8 || a.Resources.Currency != before.Currency-32 {
+	if a.Resources.Humans != before.Humans-2 || a.Resources.Iron != before.Iron-32 || a.Resources.Currency != before.Currency-8 {
 		t.Fatal("Incorrect tank cost")
 	}
 }

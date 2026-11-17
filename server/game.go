@@ -62,6 +62,7 @@ type Event struct {
 	Kind string `json:"kind"`
 }
 type Game struct {
+	Timeline    []BattleFrame    `json:"timeline"`
 	Code        string           `json:"code"`
 	Host        string           `json:"host"`
 	Phase       string           `json:"phase"`
@@ -214,9 +215,9 @@ func rate(t string) int {
 func cost(t string, n int) Resources {
 	switch t {
 	case "tank":
-		return Resources{n, n, 4 * n, 16 * n}
+		return Resources{n, n, 16 * n, 4 * n}
 	case "artillery":
-		return Resources{n, n, 2 * n, 8 * n}
+		return Resources{n, n, 8 * n, 2 * n}
 	}
 	return Resources{n, n, 0, 4 * n}
 }
@@ -463,7 +464,7 @@ func (g *Game) advance() {
 	case "plan":
 		g.botOrders()
 		g.resolve()
-		g.setPhase("simulate", 12)
+		g.setPhase("simulate", max(12, len(g.Timeline)*3))
 	case "simulate":
 		g.setPhase("gather", 0)
 		for _, t := range g.Territories {
@@ -613,6 +614,8 @@ func hurt(u *Unit, damage float64) {
 }
 func (g *Game) resolve() {
 	g.Events = []Event{}
+	g.Timeline = []BattleFrame{}
+	g.recordFrame("Orders revealed · armies before combat")
 	orig := map[string]int{}
 	damage := map[string]float64{}
 	for _, u := range g.Units {
@@ -644,6 +647,7 @@ func (g *Game) resolve() {
 			hurt(u, d)
 		}
 	}
+	g.recordFrame("Bombardment resolved · simultaneous artillery damage")
 	// Resolve opposing border crossings at their origins; surviving forces hold.
 	blocked := map[string]bool{}
 	damage = map[string]float64{}
@@ -668,6 +672,7 @@ func (g *Game) resolve() {
 			hurt(u, d)
 		}
 	}
+	g.recordFrame("Border clashes resolved · simultaneous return fire")
 	for _, u := range g.Units {
 		o, ok := g.Orders[u.ID]
 		if ok && o.Kind == "move" {
@@ -677,6 +682,7 @@ func (g *Game) resolve() {
 			}
 		}
 	}
+	g.recordFrame("Movement resolved · armies reach their destinations")
 	stationed := map[int][]*Unit{}
 	retreats := map[string]bool{}
 	for _, u := range g.Units {
@@ -753,6 +759,9 @@ func (g *Game) resolve() {
 		if best != "" {
 			g.Territories[t.ID].Owner = best
 		}
+		if len(groups) > 1 || (best != "" && best != t.Owner) {
+			g.recordFrame("Territory resolved · " + t.Name)
+		}
 	}
 	// Retreat only after every destination's battle and ownership are resolved.
 	for _, u := range g.Units {
@@ -783,4 +792,5 @@ func (g *Game) resolve() {
 		}
 	}
 	g.Units = living
+	g.recordFrame("Retreats and captures complete · final battlefield")
 }

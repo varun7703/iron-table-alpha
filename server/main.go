@@ -68,11 +68,15 @@ func (g *Game) view(id string) map[string]any {
 	if public {
 		events = g.Events
 	}
+	timeline := []BattleFrame{}
+	if g.Phase == "simulate" {
+		timeline = g.Timeline
+	}
 	turn := ""
 	if g.Phase == "draft" {
 		turn = g.Players[g.Draft%len(g.Players)].ID
 	}
-	return map[string]any{"code": g.Code, "host": g.Host, "phase": g.Phase, "round": g.Round, "deadline": g.Deadline, "players": ps, "territories": ts, "units": us, "orders": orders, "events": events, "turn": turn, "winner": g.Winner, "reserved": g.reserved(id, "")}
+	return map[string]any{"timeline": timeline, "simulationDuration": max(12, len(g.Timeline)*3) * 1000, "code": g.Code, "host": g.Host, "phase": g.Phase, "round": g.Round, "deadline": g.Deadline, "players": ps, "territories": ts, "units": us, "orders": orders, "events": events, "turn": turn, "winner": g.Winner, "reserved": g.reserved(id, "")}
 }
 func (h *hub) send(c *client, v any) {
 	select {
