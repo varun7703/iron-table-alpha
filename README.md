@@ -117,3 +117,7 @@ Army cards show current direct combat strength, matchup values, and separate ran
 ## Four-territory setup and capitals
 
 The server reveals one commander’s dice result every two seconds, rerolling ties. Highest roll drafts first. Players claim four tiles each in repeating order; remaining tiles are neutral, yield no player income until captured, and have no garrisons. Each commander then confirms one of their own four tiles as capital. Bots choose automatically. Capital selection has no timer. Starting infantry is placed only on drafted tiles. Capitals are markers without special income, defense, or elimination rules yet. Normal movement into a neutral tile captures it during Simulate, subject to competing arrivals. Matches run for 20 rounds.
+
+## Integrated gameplay animations
+
+The eight approved effects run in gameplay: interpolated army movement, artillery arcs/recoil flash, simultaneous tank and infantry volleys, impact-timed health/casualties, retreat routes, territory color/flag capture, and Gather production traveling to the player’s capital stockpile. Combat calculations remain server-authoritative. Use Reduced motion during Simulate for stepped movement and simpler impacts. Recruitment and merging have no animations. Capital stockpile travel is a visual presentation of global resources, not a new supply restriction; if the capital is occupied, income still arrives but the capital delivery animation is omitted.

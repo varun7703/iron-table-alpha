@@ -60,6 +60,10 @@ func (g *Game) view(id string) map[string]any {
 	}
 	orders := map[string]Order{}
 	for key, o := range g.Orders {
+		if g.Phase == "simulate" {
+			orders[key] = o
+			continue
+		}
 		u := g.unit(key)
 		if u != nil && (public || u.Owner == id) {
 			orders[key] = o

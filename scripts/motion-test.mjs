@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {sampleBattle} from '../src/battleMotion.ts';
+const u={id:'a',owner:'p',type:'tank',territory:0,count:5,health:100,ration:1,fed:true};
+const before={label:'Before',units:[u],owners:['p',''],events:[]};
+const after={label:'After',units:[{...u,territory:1,count:3,health:55}],owners:['p','p'],events:[]};
+const tiles=[{x:0,y:0},{x:100,y:0}];
+const start=sampleBattle(before,after,0,tiles,false);assert.equal(start.units[0].count,5);assert.equal(start.units[0].health,100);assert.equal(start.owners[1],'');
+const flight=sampleBattle(before,after,.35,tiles,false);assert(flight.units[0].motionX>0&&flight.units[0].motionX<100);assert.equal(flight.units[0].count,5);
+const impact=sampleBattle(before,after,.7,tiles,false);assert.equal(impact.units[0].count,3);assert(impact.units[0].health<100&&impact.units[0].health>55);assert.equal(impact.owners[1],'p');
+const end=sampleBattle(before,after,1,tiles,false);assert.equal(end.units[0].motionX,100);assert.equal(end.units[0].health,55);assert.equal(end.units[0].territory,1);
+const destroyed={...after,units:[]};assert.equal(sampleBattle(before,destroyed,.3,tiles,false).units.length,1);assert.equal(sampleBattle(before,destroyed,.8,tiles,false).units.length,0);
+assert.equal(sampleBattle(before,after,.3,tiles,true).units[0].motionX,0);assert.equal(sampleBattle(before,after,.8,tiles,true).units[0].motionX,100);
+assert.equal(before.units[0].count,5);assert.equal(before.units[0].health,100);
+console.log('PASS: movement interpolation, impact-timed casualties, health interpolation, capture timing, destruction, reduced motion, and immutable server snapshots.');
