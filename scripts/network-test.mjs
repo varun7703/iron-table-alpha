@@ -22,5 +22,10 @@ try{
  const duplicateID=crypto.randomUUID(),body=JSON.stringify({id:duplicateID,action:'recruit',type:'artillery',count:1,target:territory.id});const count=a.game.units.length;a.ws.send(body);await a.wait(()=>a.messages.some(m=>m.id===duplicateID));a.ws.send(body);await new Promise(r=>setTimeout(r,150));assert.equal(a.game.units.length,count+1);
  reconnect=new Commander();await reconnect.connect();await reconnect.command('resume',{code:a.session.code,token:a.session.token});assert.equal(reconnect.session.player,a.session.player);assert.equal(reconnect.game.phase,'gather');assert(reconnect.game.units.every(u=>u.owner===a.session.player));
  await reconnect.command('ready');await b.command('ready');await reconnect.wait(()=>reconnect.game.phase==='plan'&&reconnect.game.round===2);
+
+ const oldSession={...b.session};await b.command('leave');await b.wait(()=>b.messages.some(m=>m.type==='left'));await reconnect.wait(()=>reconnect.game.phase==='finished');assert(!reconnect.game.players.some(p=>p.id===oldSession.player));assert(reconnect.game.territories.every(t=>t.owner!==oldSession.player));assert(reconnect.game.units.every(u=>u.owner!==oldSession.player));
+ await b.command('resume',{code:oldSession.code,token:oldSession.token}).then(()=>{throw Error('Surrendered seat resumed')},err=>assert.match(err.message,/Session expired/));
+ await b.command('create',{name:'New campaign'});assert.notEqual(b.session.code,oldSession.code);
+ await reconnect.command('leave');await reconnect.wait(()=>reconnect.messages.some(m=>m.type==='left'));
  console.log('PASS: two-player lobby, 8-pick draft and capital selection, private orders, ownership validation, simultaneous simulation, currency charge, gather production, recruitment, food, duplicate command protection, reconnect, and round progression.');
 }finally{a.close();b.close();reconnect?.close()}

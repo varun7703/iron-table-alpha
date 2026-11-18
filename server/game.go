@@ -178,7 +178,20 @@ func (g *Game) unit(id string) *Unit {
 	return nil
 }
 func (g *Game) addPlayer(name string, bot bool) *Player {
-	p := &Player{Capital: -1, ID: uid(), Token: uid(), Name: name, Color: colors[len(g.Players)], Bot: bot, Resources: Resources{40, 120, 40, 160}}
+	color := colors[0]
+	for _, candidate := range colors {
+		used := false
+		for _, existing := range g.Players {
+			if existing.Color == candidate {
+				used = true
+			}
+		}
+		if !used {
+			color = candidate
+			break
+		}
+	}
+	p := &Player{Capital: -1, ID: uid(), Token: uid(), Name: name, Color: color, Bot: bot, Resources: Resources{40, 120, 40, 160}}
 	g.Players = append(g.Players, p)
 	if g.Host == "" {
 		g.Host = p.ID
@@ -268,7 +281,7 @@ func (g *Game) command(id string, c Command) error {
 		return g.chooseCapital(id, c.Target)
 	}
 	if c.Action == "claim" {
-		if g.Phase != "draft" || g.Players[g.Draft%len(g.Players)].ID != id {
+		if g.Phase != "draft" || g.draftPlayer().ID != id {
 			return bad("Wait for your draft turn")
 		}
 		if c.Target < 0 || c.Target >= len(g.Territories) || g.Territories[c.Target].Owner != "" {
@@ -393,11 +406,14 @@ func (g *Game) claim(t int, id string) {
 	}
 }
 func (g *Game) autoDraft() {
-	for g.Phase == "draft" && g.Players[g.Draft%len(g.Players)].Bot {
+	for g.Phase == "draft" && g.draftPlayer() != nil && g.draftPlayer().Bot {
 		g.draftOne()
 	}
 }
 func (g *Game) draftOne() {
+	if g.draftPlayer() == nil {
+		return
+	}
 	free := []int{}
 	for _, t := range g.Territories {
 		if t.Owner == "" {
@@ -405,7 +421,7 @@ func (g *Game) draftOne() {
 		}
 	}
 	if len(free) > 0 {
-		g.claim(free[rng.IntN(len(free))], g.Players[g.Draft%len(g.Players)].ID)
+		g.claim(free[rng.IntN(len(free))], g.draftPlayer().ID)
 	}
 }
 func (g *Game) allReady() bool {

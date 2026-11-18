@@ -79,7 +79,7 @@ func (g *Game) view(id string) map[string]any {
 	}
 	turn := ""
 	if g.Phase == "draft" {
-		turn = g.Players[g.Draft%len(g.Players)].ID
+		turn = g.draftPlayer().ID
 	}
 	return map[string]any{"rollIndex": g.RollIndex, "timeline": timeline, "simulationDuration": max(12, len(g.Timeline)*3) * 1000, "code": g.Code, "host": g.Host, "phase": g.Phase, "round": g.Round, "deadline": g.Deadline, "players": ps, "territories": ts, "units": us, "orders": orders, "events": events, "turn": turn, "winner": g.Winner, "reserved": g.reserved(id, "")}
 }
@@ -113,6 +113,26 @@ func (h *hub) handle(c *client, cmd Command) {
 	}
 	c.seen[cmd.ID] = true
 	var err error
+	if cmd.Action == "leave" && c.game != nil {
+		g, id := c.game, c.player
+		if err := g.leave(id); err != nil {
+			h.send(c, map[string]any{"type": "error", "message": err.Error(), "id": cmd.ID})
+			return
+		}
+		for peer := range h.clients {
+			if peer.game == g && peer.player == id {
+				peer.game = nil
+				peer.player = ""
+				h.send(peer, map[string]any{"type": "left"})
+			}
+		}
+		h.broadcast(g)
+		if len(g.Players) == 0 {
+			delete(h.games, g.Code)
+		}
+		h.send(c, map[string]any{"type": "ack", "id": cmd.ID})
+		return
+	}
 	if c.game == nil {
 		switch cmd.Action {
 		case "create", "join", "resume":

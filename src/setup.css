@@ -1,3 +1,5 @@
 /* Keep initiative rolls visible even when Start was clicked below the fold. */
 .dice-stage{position:fixed;z-index:45;top:150px;left:50%;transform:translateX(-50%);width:min(760px,94vw);max-height:65vh;overflow:auto;border:2px solid #d8b87b88;border-radius:8px;box-shadow:0 24px 100px #07150ecc}
 @media(max-width:600px){.dice-stage{top:100px;padding:20px 12px}.dice-line{gap:18px}.dice-player{min-width:100px}.phase-notice{font-size:14px;padding:14px 18px}}
+
+.exit-round{background:#aa5a3d22;border:1px solid #cf8e6866;color:#edbf9b;padding:10px 14px;border-radius:3px;font-size:13px;white-space:nowrap}.exit-actions{display:flex;gap:12px;margin-top:24px}.exit-confirm{background:#bb7350!important;color:#fff1d5!important}.exit-dialog h2{margin-top:0}.exit-dialog{width:min(560px,94vw)}@media(max-width:600px){.exit-actions{flex-direction:column}.exit-round{padding:8px;font-size:11px}.top-right{flex-wrap:wrap}.topbar{height:auto;min-height:72px;gap:12px;padding-top:12px;padding-bottom:12px}}
