@@ -17,16 +17,17 @@ type Resources struct {
 	Currency int `json:"currency"`
 }
 type Player struct {
-	Capital    int       `json:"capital"`
-	Eliminated bool      `json:"eliminated"`
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Color      string    `json:"color"`
-	Roll       int       `json:"roll"`
-	Ready      bool      `json:"ready"`
-	Bot        bool      `json:"bot"`
-	Resources  Resources `json:"resources"`
-	Token      string    `json:"-"`
+	DisconnectedUntil int64     `json:"disconnectedUntil"`
+	Capital           int       `json:"capital"`
+	Eliminated        bool      `json:"eliminated"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Color             string    `json:"color"`
+	Roll              int       `json:"roll"`
+	Ready             bool      `json:"ready"`
+	Bot               bool      `json:"bot"`
+	Resources         Resources `json:"resources"`
+	Token             string    `json:"-"`
 }
 type Territory struct {
 	Neutral   bool    `json:"neutral"`
@@ -64,7 +65,6 @@ type Event struct {
 	Kind string `json:"kind"`
 }
 type Game struct {
-	UpdatedAt   time.Time        `json:"-"`
 	RollIndex   int              `json:"rollIndex"`
 	Timeline    []BattleFrame    `json:"timeline"`
 	Code        string           `json:"code"`
@@ -106,7 +106,7 @@ func uid() string {
 	return hex.EncodeToString(b)
 }
 func newGame(code string) *Game {
-	g := &Game{UpdatedAt: time.Now(), Code: code, Phase: "lobby", Orders: map[string]Order{}, Events: []Event{}, Units: []*Unit{}}
+	g := &Game{Code: code, Phase: "lobby", Orders: map[string]Order{}, Events: []Event{}, Units: []*Unit{}}
 	g.Territories = makeMap()
 	return g
 }
@@ -660,6 +660,7 @@ func attack(u *Unit, other string, direct bool) float64 {
 	}
 	return float64(u.Count) * base * (u.Health / 100) * mod * ration
 }
+
 // applyDamage applies accumulated damage to units while pooling fractional
 // troop losses across same-sector, same-owner, same-type stacks so splitting
 // armies into smaller stacks neither reduces nor amplifies casualties.
@@ -741,6 +742,7 @@ func applyDamage(units []*Unit, damage map[string]float64) {
 		}
 	}
 }
+
 // distributeDamage spreads attacker a's damage across hostile living targets in
 // territory (or across all hostile living targets when territory < 0), weighted
 // by each target stack's troop count. Returns true if any hostile troops were hit.

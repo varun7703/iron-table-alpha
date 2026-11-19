@@ -3,3 +3,5 @@
 @media(max-width:600px){.dice-stage{top:100px;padding:20px 12px}.dice-line{gap:18px}.dice-player{min-width:100px}.phase-notice{font-size:14px;padding:14px 18px}}
 
 .exit-round{background:#aa5a3d22;border:1px solid #cf8e6866;color:#edbf9b;padding:10px 14px;border-radius:3px;font-size:13px;white-space:nowrap}.exit-actions{display:flex;gap:12px;margin-top:24px}.exit-confirm{background:#bb7350!important;color:#fff1d5!important}.exit-dialog h2{margin-top:0}.exit-dialog{width:min(560px,94vw)}@media(max-width:600px){.exit-actions{flex-direction:column}.exit-round{padding:8px;font-size:11px}.top-right{flex-wrap:wrap}.topbar{height:auto;min-height:72px;gap:12px;padding-top:12px;padding-bottom:12px}}
+
+.disconnect-banner{padding:14px 24px;background:#6b482b;color:#fff0cf;font-size:14px;line-height:1.6;border-bottom:1px solid #e6bd6c}.player b{white-space:nowrap;font-size:11px}

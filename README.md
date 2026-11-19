@@ -125,3 +125,7 @@ The eight approved effects run in gameplay: interpolated army movement, artiller
 ## Exit round / leave lobby
 
 The header exit button opens a confirmation. Confirming surrenders the entire match: the server removes the player and capital, dissolves all their armies, cancels their orders, and neutralizes their territory. Remaining players are notified immediately through their next state; the departed player returns to room creation and cannot resume the surrendered seat. Temporary WebSocket disconnects and refreshes preserve the seat for reconnect. Host control transfers to a remaining human where possible. Departures during setup cannot block rolls, drafting, or capital selection; if fewer than two players remain in setup, it resets to the lobby. During a match the last active commander wins. A departure during Simulate replaces playback with a fresh battlefield snapshot to avoid showing dissolved units again.
+
+## Disconnect grace period
+
+Idle-command room eviction is disabled. Losing a WebSocket connection starts a five-minute server-side timer for that player; reconnecting to the same seat cancels it. Remaining commanders see the offline countdown. At expiry the server removes only the disconnected player using surrender rules: dissolve armies, cancel orders, neutralize territories, remove the capital and readiness requirement. A room with a connected human is never disbanded for inactivity. When all human seats have expired or explicitly exited, the empty/bot-only room is removed. Server restarts still reset in-memory matches.
