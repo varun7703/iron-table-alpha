@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -212,5 +213,253 @@ func TestBorderCrossingAndFullCampaign(t *testing.T) {
 		if g.Phase != "finished" {
 			t.Fatal("Campaign failed to end")
 		}
+	}
+}
+
+func TestStackSplitInvarianceAndChaffFix(t *testing.T) {
+	// 1. Destination battle: 5 Tanks + 5x1 Inf (chaff) vs 8 Tanks must match merged 5 Tanks + 1x5 Inf vs 8 Tanks.
+	gMerged := fixture()
+	aM, bM := gMerged.Players[0], gMerged.Players[1]
+	gMerged.Units = []*Unit{
+		{ID: "at", Owner: aM.ID, Type: "tank", Territory: 6, Count: 5, Health: 100, Ration: 1},
+		{ID: "ai", Owner: aM.ID, Type: "infantry", Territory: 6, Count: 5, Health: 100, Ration: 1},
+		{ID: "bt", Owner: bM.ID, Type: "tank", Territory: 12, Count: 8, Health: 100, Ration: 1},
+	}
+	gMerged.Orders["at"] = Order{"at", "move", 12}
+	gMerged.Orders["ai"] = Order{"ai", "move", 12}
+	gMerged.resolve()
+
+	gSplit := fixture()
+	aS, bS := gSplit.Players[0], gSplit.Players[1]
+	gSplit.Units = []*Unit{
+		{ID: "at", Owner: aS.ID, Type: "tank", Territory: 6, Count: 5, Health: 100, Ration: 1},
+		{ID: "bt", Owner: bS.ID, Type: "tank", Territory: 12, Count: 8, Health: 100, Ration: 1},
+	}
+	gSplit.Orders["at"] = Order{"at", "move", 12}
+	for i := 0; i < 5; i++ {
+		id := uid()
+		gSplit.Units = append(gSplit.Units, &Unit{ID: id, Owner: aS.ID, Type: "infantry", Territory: 6, Count: 1, Health: 100, Ration: 1})
+		gSplit.Orders[id] = Order{id, "move", 12}
+	}
+	gSplit.resolve()
+
+	if gMerged.Territories[12].Owner != bM.ID || gSplit.Territories[12].Owner != bS.ID {
+		t.Fatal("Chaff screen upset superior 8-tank defender")
+	}
+	if gSplit.unit("at").Count != gMerged.unit("at").Count || gSplit.unit("bt").Count != gMerged.unit("bt").Count {
+		t.Fatalf("Split tank casualties diverged: split=%d/%d vs merged=%d/%d", gSplit.unit("at").Count, gSplit.unit("bt").Count, gMerged.unit("at").Count, gMerged.unit("bt").Count)
+	}
+	splitInf := 0
+	for _, u := range gSplit.Units {
+		if u.Owner == aS.ID && u.Type == "infantry" {
+			splitInf += u.Count
+		}
+	}
+	if splitInf != gMerged.unit("ai").Count {
+		t.Fatalf("Split infantry casualties diverged: split=%d vs merged=%d", splitInf, gMerged.unit("ai").Count)
+	}
+
+	// 2. Border clash: 1x10 Inf vs 5x2 Inf crossing must mirror 1x10 vs 1x10 without Nx AOE multiplication.
+	gBorder := fixture()
+	pA, pB := gBorder.Players[0], gBorder.Players[1]
+	gBorder.Units = []*Unit{{ID: "a10", Owner: pA.ID, Type: "infantry", Territory: 6, Count: 10, Health: 100, Ration: 1}}
+	gBorder.Orders["a10"] = Order{"a10", "move", 12}
+	for i := 0; i < 5; i++ {
+		id := uid()
+		gBorder.Units = append(gBorder.Units, &Unit{ID: id, Owner: pB.ID, Type: "infantry", Territory: 12, Count: 2, Health: 100, Ration: 1})
+		gBorder.Orders[id] = Order{id, "move", 6}
+	}
+	gBorder.resolve()
+	bTotal := 0
+	for _, u := range gBorder.Units {
+		if u.Owner == pB.ID {
+			bTotal += u.Count
+		}
+	}
+	if gBorder.unit("a10").Count != bTotal || bTotal != 8 {
+		t.Fatalf("Symmetric border clash asymmetric due to splitting: A=%d, B=%d", gBorder.unit("a10").Count, bTotal)
+	}
+}
+
+func TestDefenderHoldsOnTieAndNeutralEval(t *testing.T) {
+	// Isolated incumbent defender tied in its sole territory must hold and survive.
+	g := newGame("TIE01")
+	a := g.addPlayer("Attacker", false)
+	b := g.addPlayer("Defender", false)
+	for i := range g.Territories {
+		g.Territories[i].Owner = a.ID
+	}
+	g.Territories[0].Owner = b.ID
+	g.Units = []*Unit{
+		{ID: "atk", Owner: a.ID, Type: "infantry", Territory: 1, Count: 4, Health: 100, Ration: 1},
+		{ID: "def", Owner: b.ID, Type: "infantry", Territory: 0, Count: 4, Health: 100, Ration: 1},
+	}
+	g.Orders = map[string]Order{"atk": {"atk", "move", 0}}
+	g.resolve()
+	if g.Territories[0].Owner != b.ID || g.unit("def") == nil || g.unit("def").Territory != 0 {
+		t.Fatal("Incumbent defender lost or died on a tie")
+	}
+	if g.unit("atk") == nil || g.unit("atk").Territory != 1 {
+		t.Fatal("Tied attacker did not retreat to origin")
+	}
+
+	// Tied attackers entering a neutral territory both retreat and leave it neutral.
+	g2 := newGame("TIE02")
+	p1 := g2.addPlayer("One", false)
+	p2 := g2.addPlayer("Two", false)
+	g2.Territories[0].Owner = p1.ID
+	g2.Territories[2].Owner = p2.ID
+	g2.Units = []*Unit{
+		{ID: "u1", Owner: p1.ID, Type: "infantry", Territory: 0, Count: 4, Health: 100, Ration: 1},
+		{ID: "u2", Owner: p2.ID, Type: "infantry", Territory: 2, Count: 4, Health: 100, Ration: 1},
+	}
+	g2.Orders = map[string]Order{"u1": {"u1", "move", 1}, "u2": {"u2", "move", 1}}
+	g2.resolve()
+	if g2.Territories[1].Owner != "" || g2.unit("u1").Territory != 0 || g2.unit("u2").Territory != 2 {
+		t.Fatal("Neutral tie was not left neutral with mutual retreat")
+	}
+
+	// Unopposed capture emits an explicit capture event.
+	g3 := newGame("CAPEV")
+	c1 := g3.addPlayer("Vanguard", false)
+	g3.addPlayer("Rival", false)
+	g3.Territories[0].Owner = c1.ID
+	g3.Units = []*Unit{{ID: "scout", Owner: c1.ID, Type: "infantry", Territory: 0, Count: 2, Health: 100, Ration: 1}}
+	g3.Orders = map[string]Order{"scout": {"scout", "move", 1}}
+	g3.resolve()
+	foundCapture := false
+	for _, ev := range g3.Events {
+		if ev.Kind == "capture" && ev.To == 1 {
+			foundCapture = true
+		}
+	}
+	if !foundCapture {
+		t.Fatal("Unopposed capture did not emit capture event")
+	}
+}
+
+func TestWeightedReinforceSectorCapAndPriorityAutoFeed(t *testing.T) {
+	g := fixture()
+	g.Phase = "gather"
+	p := g.Players[0]
+	p.Resources = Resources{Humans: 50, Food: 15, Iron: 100, Currency: 200}
+	g.Units = []*Unit{
+		{ID: "inf", Owner: p.ID, Type: "infantry", Territory: 0, Count: 10, Health: 100, Ration: 1, Fed: false},
+		{ID: "tnk", Owner: p.ID, Type: "tank", Territory: 0, Count: 5, Health: 20, Ration: 1, Fed: false},
+	}
+	if err := g.command(p.ID, Command{Action: "reinforce", Unit: "tnk", Count: 5}); err != nil {
+		t.Fatal(err)
+	}
+	if g.unit("tnk").Count != 10 || g.unit("tnk").Health != 60 {
+		t.Fatalf("Reinforce did not apply troop-weighted health: %+v", g.unit("tnk"))
+	}
+	// Sector cap of 6 separate stacks on recruit.
+	for i := 0; i < 4; i++ {
+		if err := g.command(p.ID, Command{Action: "recruit", Type: "infantry", Count: 1, Target: 0}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := g.command(p.ID, Command{Action: "recruit", Type: "infantry", Count: 1, Target: 0}); err == nil {
+		t.Fatal("Accepted 7th separate army stack in one sector")
+	}
+	// Priority autoFeed: with 15 food for 10 Infantry + 10 Tanks (leaving only those two), Tanks get 1.0 and Infantry gets 0.5 (0 starvation).
+	g.Units = g.Units[:2]
+	g.autoFeed(p)
+	if g.unit("tnk").Ration != 1 || g.unit("inf").Ration != .5 || p.Resources.Food != 0 {
+		t.Fatalf("Priority autoFeed misallocated food: tank=%v inf=%v rem=%d", g.unit("tnk").Ration, g.unit("inf").Ration, p.Resources.Food)
+	}
+}
+
+func TestRoundTwentyEndsAfterSimulateAndUnready(t *testing.T) {
+	g := fixture()
+	a, b := g.Players[0], g.Players[1]
+	if err := g.command(a.ID, Command{Action: "ready"}); err != nil {
+		t.Fatal(err)
+	}
+	if !a.Ready {
+		t.Fatal("Expected ready")
+	}
+	if err := g.command(a.ID, Command{Action: "unready"}); err != nil {
+		t.Fatal(err)
+	}
+	if a.Ready {
+		t.Fatal("Unready did not clear lock")
+	}
+	// Gather ready should not prematurely consume food if unlocked before advance.
+	g.Phase = "gather"
+	g.Units = []*Unit{{ID: "u", Owner: a.ID, Type: "infantry", Territory: 0, Count: 4, Health: 100, Ration: 1, Fed: false}}
+	foodBefore := a.Resources.Food
+	_ = g.command(a.ID, Command{Action: "ready"})
+	_ = g.command(a.ID, Command{Action: "unready"})
+	if a.Resources.Food != foodBefore || g.unit("u").Fed {
+		t.Fatal("Lock/unlock in Gather mutated food prematurely")
+	}
+
+	// Round 20 ends directly after Simulate without entering untimed Gather.
+	g.Round = 20
+	g.Phase = "plan"
+	_ = g.command(a.ID, Command{Action: "ready"})
+	_ = g.command(b.ID, Command{Action: "ready"})
+	if g.Phase != "simulate" {
+		t.Fatal("Expected simulate")
+	}
+	g.advance()
+	if g.Phase != "finished" {
+		t.Fatalf("Round 20 did not finish after simulate: phase=%s", g.Phase)
+	}
+}
+
+func TestBombardmentSplitInvarianceAndMixedHealthApplyDamage(t *testing.T) {
+	// Bombardment against 1x10 Infantry vs 10x1 Infantry must inflict identical losses.
+	runBombard := func(stacks int) int {
+		g := fixture()
+		a, b := g.Players[0], g.Players[1]
+		g.Territories[0].Owner = a.ID
+		g.Territories[1].Owner = b.ID
+		g.Units = []*Unit{{ID: "art", Owner: a.ID, Type: "artillery", Territory: 0, Count: 4, Health: 100, Ration: 1, Fed: true}}
+		per := 10 / stacks
+		for i := 0; i < stacks; i++ {
+			g.Units = append(g.Units, &Unit{
+				ID: fmt.Sprintf("def-%d", i), Owner: b.ID, Type: "infantry",
+				Territory: 1, Count: per, Health: 100, Ration: 1, Fed: true,
+			})
+		}
+		g.Phase = "plan"
+		g.Orders = map[string]Order{"art": {Kind: "bombard", Target: 1}}
+		g.resolve()
+		rem := 0
+		for _, u := range g.Units {
+			if u.Owner == b.ID {
+				rem += u.Count
+			}
+		}
+		return rem
+	}
+	mergedRem := runBombard(1)
+	splitRem := runBombard(10)
+	if mergedRem != splitRem {
+		t.Fatalf("Bombardment split exploit: 1x10 left %d troops vs 10x1 left %d troops", mergedRem, splitRem)
+	}
+
+	// Mixed-health applyDamage: a stack wiped by 0% HP must not steal pooled
+	// remainder kills from healthy stacks nor cause extra over-kills.
+	lowHP := &Unit{ID: "low", Owner: "p1", Type: "infantry", Territory: 0, Count: 1, Health: 5}
+	healthy := &Unit{ID: "ok", Owner: "p1", Type: "infantry", Territory: 0, Count: 3, Health: 100}
+	// Total damage = 15 (pooled floor = 1 kill). lowHP takes 5 dmg (HP -> 0, killed = 1).
+	// healthy takes 10 dmg (baseLoss = 1, HP -> 80). Total already killed = 2 >= 1, so extra = 0.
+	applyDamage([]*Unit{lowHP, healthy}, map[string]float64{"low": 5, "ok": 10})
+	if lowHP.Count != 0 || healthy.Count != 2 {
+		t.Fatalf("Mixed-health over-kill/under-kill: low=%d healthy=%d (want 0, 2)", lowHP.Count, healthy.Count)
+	}
+
+	// Second case: 3 stacks of 1 troop each take 8 damage (total = 24, pooled floor = 2 kills).
+	// Stack 0 dies from low HP (1 kill); remaining 1 pooled kill must hit a living stack.
+	s0 := &Unit{ID: "s0", Owner: "p1", Type: "infantry", Territory: 0, Count: 1, Health: 10}
+	s1 := &Unit{ID: "s1", Owner: "p1", Type: "infantry", Territory: 0, Count: 1, Health: 100}
+	s2 := &Unit{ID: "s2", Owner: "p1", Type: "infantry", Territory: 0, Count: 1, Health: 100}
+	applyDamage([]*Unit{s0, s1, s2}, map[string]float64{"s0": 8, "s1": 8, "s2": 8})
+	alive := s0.Count + s1.Count + s2.Count
+	if s0.Count != 0 || alive != 1 {
+		t.Fatalf("Mixed-health pooled remainder failed: s0=%d s1=%d s2=%d (want s0=0, total alive=1)", s0.Count, s1.Count, s2.Count)
 	}
 }

@@ -40,12 +40,12 @@ These fill decisions that were still open in the design conversation; they are a
 | Extra food | 1.5 per troop/piece, rounded up; +20 health, capped at 100 |
 | Starvation | -25 health (minimum 1), 30% attack |
 | Merging | Same owner/type/territory, both unfed; troop-weighted health |
-| Reinforcement | Same resource cost per added troop/piece as recruitment; preserves stack health |
+| Reinforcement | Same resource cost per added troop/piece as recruitment; troop-weighted health (new troops enter at 100); up to 6 armies per sector |
 | Captured production | Available in the immediately following Gather |
 
 Artillery and tank recruitment now emphasize iron: artillery costs 2 currency + 4 iron and tanks cost 4 currency + 8 iron, plus one human each. This replaces the earlier currency-based 4:2:1 cost target.
 
-Combat is deterministic for the alpha: troop count × base attack × health fraction × ration modifier × matchup. Base attack is infantry 2, tank 7, ranged artillery 4, direct artillery 1. Tanks receive ×1.4 against infantry; infantry/tanks receive ×1.5 against artillery; ranged artillery receives ×1.5 against infantry and ×0.7 against tanks. Damage is applied simultaneously within each encounter; each 10 damage kills one troop and damage also reduces stack health. Border-crossing opponents clash and hold their origins. Ranged fire resolves first, then border clashes, movements, and destination battles. Destination losers retreat after all ownership resolves, or are removed if no friendly neighboring destination exists. Tied forces retreat and ownership stays unchanged.
+Combat is deterministic for the alpha: troop count × base attack × health fraction × ration modifier × matchup. Base attack is infantry 2, tank 7, ranged artillery 4, direct artillery 1. Tanks receive ×1.4 against infantry; infantry/tanks receive ×1.5 against artillery; ranged artillery receives ×1.5 against infantry and ×0.7 against tanks. Damage is applied simultaneously within each encounter; each 10 damage kills one troop and damage also reduces stack health. Border-crossing opponents clash and hold their origins. Ranged fire resolves first, then border clashes, movements, and destination battles. Destination losers retreat after all ownership resolves, or are removed if no friendly neighboring destination exists. In a tie, an incumbent defending garrison holds its sector; tied attackers in an unowned or third-party sector retreat and ownership stays unchanged. Campaigns end immediately after Simulate when round 20 completes or one commander holds the entire continent.
 
 ## Architecture and limits
 

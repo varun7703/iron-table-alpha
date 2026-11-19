@@ -81,7 +81,10 @@ func (g *Game) leave(id string) error {
 			}
 		}
 	}
-	if len(g.Players) == 0 {
+	if len(g.Players) == 0 || !g.hasHumans() {
+		g.Players = []*Player{}
+		g.Units = []*Unit{}
+		g.Orders = map[string]Order{}
 		g.Phase = "finished"
 		g.Deadline = 0
 		g.Winner = "No commanders remaining"
@@ -143,10 +146,28 @@ func (g *Game) leave(id string) error {
 		g.Winner = "No active commanders remaining"
 	} else if active == 1 {
 		g.finish()
-	} else if g.allReady() {
-		g.advance()
+	} else {
+		if g.Phase == "plan" {
+			for _, p := range g.Players {
+				if !p.Bot {
+					p.Ready = false
+				}
+			}
+		}
+		if g.allReady() {
+			g.advance()
+		}
 	}
 	return nil
+}
+
+func (g *Game) hasHumans() bool {
+	for _, p := range g.Players {
+		if !p.Bot {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Game) draftPlayer() *Player {

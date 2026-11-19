@@ -146,3 +146,30 @@ func TestLeaveAdvancesReadyCommanders(t *testing.T) {
 		t.Fatal("Surrender left phantom combat in replay")
 	}
 }
+
+func TestBotCleanupAndMidPlanLeaveUnlocks(t *testing.T) {
+	// 1. Leaving when only bots remain clears orphaned bots so the server can evict the room.
+	g := newGame("BOTCLEAN")
+	human := g.addPlayer("Human", false)
+	g.addPlayer("Bot 1", true)
+	g.addPlayer("Bot 2", true)
+	if err := g.leave(human.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Players) != 0 || g.Phase != "finished" {
+		t.Fatalf("Orphaned bots retained after last human left: players=%d phase=%s", len(g.Players), g.Phase)
+	}
+
+	// 2. Mid-Plan surrender in a 3-player match resets remaining humans' Ready locks so locked players can adapt.
+	m := fixture()
+	c := m.addPlayer("Charlie", false)
+	m.Territories[23].Owner = c.ID
+	m.Phase = "plan"
+	m.Players[0].Ready = true
+	if err := m.leave(c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if m.Phase != "plan" || m.Players[0].Ready {
+		t.Fatal("Locked rival was not unlocked when a commander surrendered during Plan")
+	}
+}

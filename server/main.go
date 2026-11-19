@@ -97,6 +97,14 @@ func (h *hub) broadcast(g *Game) {
 		}
 	}
 }
+func (h *hub) hasClients(g *Game) bool {
+	for c := range h.clients {
+		if c.game == g {
+			return true
+		}
+	}
+	return false
+}
 func (h *hub) handle(c *client, cmd Command) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -119,6 +127,7 @@ func (h *hub) handle(c *client, cmd Command) {
 			h.send(c, map[string]any{"type": "error", "message": err.Error(), "id": cmd.ID})
 			return
 		}
+		g.UpdatedAt = time.Now()
 		for peer := range h.clients {
 			if peer.game == g && peer.player == id {
 				peer.game = nil
@@ -175,6 +184,7 @@ func (h *hub) handle(c *client, cmd Command) {
 				}
 				c.game = g
 				c.player = p.ID
+				g.UpdatedAt = time.Now()
 				h.send(c, map[string]any{"type": "session", "code": g.Code, "player": p.ID, "token": p.Token})
 				h.broadcast(g)
 			}
@@ -184,6 +194,7 @@ func (h *hub) handle(c *client, cmd Command) {
 	} else {
 		err = c.game.command(c.player, cmd)
 		if err == nil {
+			c.game.UpdatedAt = time.Now()
 			h.broadcast(c.game)
 		}
 	}
@@ -267,11 +278,19 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			h.mu.Lock()
-			for _, g := range h.games {
+			now := time.Now()
+			for code, g := range h.games {
 				phase, draft, roll := g.Phase, g.Draft, g.RollIndex
 				g.tick()
 				if g.Phase != phase || g.Draft != draft || g.RollIndex != roll {
+					g.UpdatedAt = now
 					h.broadcast(g)
+				}
+				if !h.hasClients(g) {
+					idle := now.Sub(g.UpdatedAt)
+					if (g.Phase == "finished" && idle > 5*time.Minute) || idle > 30*time.Minute {
+						delete(h.games, code)
+					}
 				}
 			}
 			h.mu.Unlock()
