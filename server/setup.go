@@ -31,12 +31,28 @@ func (g *Game) rollNext() {
 	g.autoDraft()
 }
 func (g *Game) beginCapitals() {
-	g.setPhase("capital", 0)
+	g.setPhase("capital", 45)
 	for _, p := range g.Players {
 		if p.Bot {
 			if capID := g.pickBotCapital(p); capID >= 0 {
 				p.Capital = capID
+				g.Territories[capID].IsCapital = true
 			}
+		}
+	}
+	g.startIfCapitalsReady()
+}
+func (g *Game) autoPickCapitals() {
+	if g.Phase != "capital" {
+		return
+	}
+	for _, p := range g.Players {
+		if p.Capital >= 0 {
+			continue
+		}
+		if capID := g.pickBotCapital(p); capID >= 0 {
+			p.Capital = capID
+			g.Territories[capID].IsCapital = true
 		}
 	}
 	g.startIfCapitalsReady()
@@ -57,13 +73,14 @@ func (g *Game) startIfCapitalsReady() {
 }
 func (g *Game) chooseCapital(id string, target int) error {
 	p := g.player(id)
-	if g.Phase != "capital" || p.Capital >= 0 {
+	if p == nil || g.Phase != "capital" || p.Capital >= 0 {
 		return fmt.Errorf("Capital selection is not available")
 	}
 	if target < 0 || target >= len(g.Territories) || g.Territories[target].Owner != id {
 		return fmt.Errorf("Choose one of your four drafted territories")
 	}
 	p.Capital = target
+	g.Territories[target].IsCapital = true
 	g.startIfCapitalsReady()
 	return nil
 }

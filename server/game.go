@@ -20,6 +20,7 @@ type Player struct {
 	DisconnectedUntil int64     `json:"disconnectedUntil"`
 	Capital           int       `json:"capital"`
 	Eliminated        bool      `json:"eliminated"`
+	VP                int       `json:"vp"`
 	ID                string    `json:"id"`
 	Name              string    `json:"name"`
 	Color             string    `json:"color"`
@@ -31,6 +32,8 @@ type Player struct {
 }
 type Territory struct {
 	Neutral   bool    `json:"neutral"`
+	Visible   bool    `json:"visible"`
+	IsCapital bool    `json:"isCapital"`
 	ID        int     `json:"id"`
 	Name      string  `json:"name"`
 	Owner     string  `json:"owner"`
@@ -65,20 +68,22 @@ type Event struct {
 	Kind string `json:"kind"`
 }
 type Game struct {
-	RollIndex   int              `json:"rollIndex"`
-	Timeline    []BattleFrame    `json:"timeline"`
-	Code        string           `json:"code"`
-	Host        string           `json:"host"`
-	Phase       string           `json:"phase"`
-	Round       int              `json:"round"`
-	Deadline    int64            `json:"deadline"`
-	Players     []*Player        `json:"players"`
-	Territories []Territory      `json:"territories"`
-	Units       []*Unit          `json:"units"`
-	Orders      map[string]Order `json:"orders"`
-	Events      []Event          `json:"events"`
-	Draft       int              `json:"draft"`
-	Winner      string           `json:"winner"`
+	RollIndex   int                     `json:"rollIndex"`
+	Timeline    []BattleFrame           `json:"timeline"`
+	Code        string                  `json:"code"`
+	Host        string                  `json:"host"`
+	Phase       string                  `json:"phase"`
+	Round       int                     `json:"round"`
+	Deadline    int64                   `json:"deadline"`
+	Players     []*Player               `json:"players"`
+	Territories []Territory             `json:"territories"`
+	Units       []*Unit                 `json:"units"`
+	Orders      map[string]Order        `json:"orders"`
+	Events      []Event                 `json:"events"`
+	LastEvents  []Event                 `json:"-"`
+	LastSimVis  map[string]map[int]bool `json:"-"`
+	Draft       int                     `json:"draft"`
+	Winner      string                  `json:"winner"`
 }
 type Command struct {
 	ID     string  `json:"id"`
@@ -94,6 +99,15 @@ type Command struct {
 	Count  int     `json:"count"`
 	Ration float64 `json:"ration"`
 }
+
+const (
+	maxStacksPerSector      = 4
+	capitalCurrencyBonus    = 4
+	capitalHumansBonus      = 2
+	capitalDefenseBonus     = 1.15
+	capitalVP               = 2
+	simulateDurationSeconds = 24
+)
 
 var colors = []string{"#cd754e", "#6d9ea5", "#b9a264", "#9b89b0"}
 
@@ -328,6 +342,30 @@ func (g *Game) command(id string, c Command) error {
 	if p.Ready {
 		return bad("Orders are locked until the next phase")
 	}
+	if c.Action == "split" {
+		if g.Phase != "gather" && g.Phase != "plan" {
+			return bad("Split belongs in Plan or Gather")
+		}
+		u := g.unit(c.Unit)
+		if u == nil || u.Owner != id {
+			return bad("Select your own army")
+		}
+		if g.Phase == "gather" && u.Fed {
+			return bad("Split an unfed army")
+		}
+		if c.Count < 1 || c.Count >= u.Count {
+			return bad("Choose a split count smaller than the army")
+		}
+		if g.sectorStackCount(u.Territory) >= maxStacksPerSector {
+			return bad(fmt.Sprintf("Sector limit reached (%d armies); merge or reinforce existing armies", maxStacksPerSector))
+		}
+		if g.Phase == "plan" {
+			delete(g.Orders, u.ID)
+		}
+		u.Count -= c.Count
+		g.Units = append(g.Units, &Unit{uid(), id, u.Type, u.Territory, c.Count, u.Health, u.Ration, u.Fed})
+		return nil
+	}
 	if c.Action == "order" || c.Action == "cancel" {
 		if g.Phase != "plan" {
 			return bad("Orders belong in Plan")
@@ -370,14 +408,8 @@ func (g *Game) command(id string, c Command) error {
 		if c.Count < 1 || c.Count > 100 || c.Target < 0 || c.Target >= len(g.Territories) || g.Territories[c.Target].Owner != id {
 			return bad("Choose your territory and a valid troop count")
 		}
-		stacks := 0
-		for _, u := range g.Units {
-			if u.Territory == c.Target && u.Count > 0 {
-				stacks++
-			}
-		}
-		if stacks >= 6 {
-			return bad("Sector limit reached (6 armies); merge or reinforce existing armies")
+		if g.sectorStackCount(c.Target) >= maxStacksPerSector {
+			return bad(fmt.Sprintf("Sector limit reached (%d armies); merge or reinforce existing armies", maxStacksPerSector))
 		}
 		if !spend(p, cost(c.Type, c.Count)) {
 			return bad("Not enough recruitment resources")
@@ -423,6 +455,15 @@ func (g *Game) command(id string, c Command) error {
 	}
 	return nil
 }
+func (g *Game) sectorStackCount(tid int) int {
+	n := 0
+	for _, u := range g.Units {
+		if u.Territory == tid && u.Count > 0 {
+			n++
+		}
+	}
+	return n
+}
 func mergeUnits(a, b *Unit) {
 	a.Health = (a.Health*float64(a.Count) + b.Health*float64(b.Count)) / float64(a.Count+b.Count)
 	a.Count += b.Count
@@ -466,6 +507,9 @@ func (g *Game) allReady() bool {
 	return true
 }
 func (g *Game) eliminated(id string) bool {
+	if id == "" {
+		return true
+	}
 	if g.Phase == "lobby" || g.Phase == "draft" || g.Phase == "roll" || g.Phase == "capital" {
 		return false
 	}
@@ -530,13 +574,14 @@ func (g *Game) advance() {
 	case "plan":
 		g.botOrders()
 		g.resolve()
-		g.setPhase("simulate", max(12, len(g.Timeline)*3))
+		g.setPhase("simulate", simulateDurationSeconds)
 	case "simulate":
+		g.Timeline = nil
 		if g.Round >= 20 || g.singleOwner() {
 			g.finish()
 			return
 		}
-		g.setPhase("gather", 0)
+		g.setPhase("gather", 120)
 		g.Orders = map[string]Order{}
 		for _, t := range g.Territories {
 			p := g.player(t.Owner)
@@ -549,6 +594,12 @@ func (g *Game) advance() {
 				p.Resources.Food += t.Yield
 			} else {
 				p.Resources.Iron += t.Yield
+			}
+		}
+		for _, p := range g.Players {
+			if p.Capital >= 0 && p.Capital < len(g.Territories) && g.Territories[p.Capital].Owner == p.ID {
+				p.Resources.Currency += capitalCurrencyBonus
+				p.Resources.Humans += capitalHumansBonus
 			}
 		}
 		for _, u := range g.Units {
@@ -592,27 +643,48 @@ func (g *Game) singleOwner() bool {
 	}
 	return true
 }
+func (g *Game) isCapitalSector(tid int) bool {
+	if tid < 0 || tid >= len(g.Territories) {
+		return false
+	}
+	if g.Territories[tid].IsCapital {
+		return true
+	}
+	for _, p := range g.Players {
+		if p.Capital == tid {
+			return true
+		}
+	}
+	return false
+}
+func (g *Game) playerScore(id string) (vp, territories, capitals int) {
+	for _, t := range g.Territories {
+		if t.Owner == id {
+			territories++
+			if g.isCapitalSector(t.ID) {
+				capitals++
+			}
+		}
+	}
+	return territories + capitalVP*capitals, territories, capitals
+}
 func (g *Game) finish() {
 	g.Phase = "finished"
 	g.Deadline = 0
 	g.Orders = map[string]Order{}
-	best := -1
+	g.Timeline = nil
+	bestVP, bestTerr, bestCaps := -1, -1, -1
 	winners := []string{}
 	for _, p := range g.Players {
-		score := 0
-		for _, t := range g.Territories {
-			if t.Owner == p.ID {
-				score++
-			}
-		}
-		if score > best {
-			best = score
+		vp, terr, caps := g.playerScore(p.ID)
+		if vp > bestVP || (vp == bestVP && terr > bestTerr) || (vp == bestVP && terr == bestTerr && caps > bestCaps) {
+			bestVP, bestTerr, bestCaps = vp, terr, caps
 			winners = []string{p.Name}
-		} else if score == best {
+		} else if vp == bestVP && terr == bestTerr && caps == bestCaps {
 			winners = append(winners, p.Name)
 		}
 	}
-	g.Winner = fmt.Sprintf("%v · %d territories", winners, best)
+	g.Winner = fmt.Sprintf("%v · %d VP (%d territories, %d capitals)", winners, bestVP, bestTerr, bestCaps)
 }
 func (g *Game) tick() {
 	if (g.Phase == "plan" || g.Phase == "gather" || g.Phase == "simulate") && g.allReady() {
@@ -625,6 +697,8 @@ func (g *Game) tick() {
 		} else if g.Phase == "draft" {
 			g.draftOne()
 			g.autoDraft()
+		} else if g.Phase == "capital" {
+			g.autoPickCapitals()
 		} else if g.Phase != "finished" {
 			g.advance()
 		}
@@ -640,6 +714,16 @@ func isDefending(orders map[string]Order, u *Unit) bool {
 func defendBonus(orders map[string]Order, u *Unit, direct bool) float64 {
 	if direct && isDefending(orders, u) {
 		return 1.2
+	}
+	return 1.0
+}
+func (g *Game) capitalBonus(u *Unit, territory int, direct bool) float64 {
+	if !direct || territory < 0 || territory >= len(g.Territories) || u == nil {
+		return 1.0
+	}
+	p := g.player(u.Owner)
+	if p != nil && p.Capital == territory && g.Territories[territory].Owner == u.Owner {
+		return capitalDefenseBonus
 	}
 	return 1.0
 }
@@ -773,9 +857,10 @@ func applyDamageBucketed(units []*Unit, damage map[string]float64, bucket func(*
 // distributeDamage spreads attacker a's damage across hostile living targets in
 // territory (or across all hostile living targets when territory < 0), weighted
 // by each target stack's effective HP (count * unitHP * health/100). Entrenched
-// units gain +20% direct combat power and take 25% less bombardment damage.
+// units gain +20% direct combat power and take 25% less bombardment damage; units
+// defending their own capital gain +15% direct combat power in destination battles.
 // Returns true if any hostile troops were hit.
-func distributeDamage(a *Unit, targets []*Unit, territory int, direct bool, orders map[string]Order, out map[string]float64) bool {
+func (g *Game) distributeDamage(a *Unit, targets []*Unit, territory int, direct bool, orders map[string]Order, out map[string]float64) bool {
 	oppWeight := 0.0
 	for _, b := range targets {
 		if b.Owner != a.Owner && b.Count > 0 && b.Health > 0 && (territory < 0 || b.Territory == territory) {
@@ -785,7 +870,7 @@ func distributeDamage(a *Unit, targets []*Unit, territory int, direct bool, orde
 	if oppWeight <= 0 {
 		return false
 	}
-	atkMult := defendBonus(orders, a, direct)
+	atkMult := defendBonus(orders, a, direct) * g.capitalBonus(a, territory, direct)
 	for _, b := range targets {
 		if b.Owner != a.Owner && b.Count > 0 && b.Health > 0 && (territory < 0 || b.Territory == territory) {
 			share := float64(b.Count) * unitHP(b.Type) * (b.Health / 100) / oppWeight
@@ -839,13 +924,13 @@ func (g *Game) resolve() {
 		edgeDamage := map[string]float64{}
 		clashed := false
 		for _, a := range sideX {
-			if distributeDamage(a, sideY, -1, true, g.Orders, edgeDamage) {
+			if g.distributeDamage(a, sideY, -1, true, g.Orders, edgeDamage) {
 				blocked[a.ID] = true
 				clashed = true
 			}
 		}
 		for _, b := range sideY {
-			if distributeDamage(b, sideX, -1, true, g.Orders, edgeDamage) {
+			if g.distributeDamage(b, sideX, -1, true, g.Orders, edgeDamage) {
 				blocked[b.ID] = true
 			}
 		}
@@ -886,7 +971,7 @@ func (g *Game) resolve() {
 			continue
 		}
 		g.Events = append(g.Events, Event{fmt.Sprintf("Artillery bombards %s", g.Territories[o.Target].Name), u.Territory, o.Target, "bombard"})
-		distributeDamage(u, g.Units, o.Target, false, g.Orders, damage)
+		g.distributeDamage(u, g.Units, o.Target, false, g.Orders, damage)
 	}
 	applyDamageBucketed(g.Units, damage, func(u *Unit) int {
 		if isDefending(g.Orders, u) {
@@ -916,7 +1001,7 @@ func (g *Game) resolve() {
 				if a.Count <= 0 || a.Territory != t.ID {
 					continue
 				}
-				distributeDamage(a, stationed[t.ID], t.ID, true, g.Orders, losses)
+				g.distributeDamage(a, stationed[t.ID], t.ID, true, g.Orders, losses)
 			}
 			applyDamage(stationed[t.ID], losses)
 			g.Events = append(g.Events, Event{"Battle at " + t.Name, t.ID, t.ID, "battle"})
@@ -934,7 +1019,7 @@ func (g *Game) resolve() {
 			strength := 0.0
 			for _, u := range groups[owner] {
 				if u.Count > 0 {
-					strength += attack(u, "", true) * defendBonus(g.Orders, u, true)
+					strength += attack(u, "", true) * defendBonus(g.Orders, u, true) * g.capitalBonus(u, t.ID, true)
 				}
 			}
 			strengths[owner] = strength
@@ -1014,4 +1099,9 @@ func (g *Game) resolve() {
 	}
 	g.Units = living
 	g.recordFrame("Retreats and captures complete · final battlefield")
+	g.LastEvents = append([]Event{}, g.Events...)
+	g.LastSimVis = make(map[string]map[int]bool, len(g.Players))
+	for _, p := range g.Players {
+		g.LastSimVis[p.ID] = g.simulateVisibleSectors(p.ID)
+	}
 }

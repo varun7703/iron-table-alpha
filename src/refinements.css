@@ -1,20 +1,670 @@
 /* Keep the map readable even in short preview windows. */
-.map{max-height:none;min-height:420px;height:auto;aspect-ratio:880/640}
-.territory-name{font-size:15px;stroke-width:2px}
-.map-wrap{min-height:420px}
-@media(min-width:1600px){.map{max-height:none}}
-@media(max-width:600px){.map{min-height:290px}.map-wrap{min-height:290px}}
+.map {
+  max-height: none;
+  min-height: 420px;
+  height: auto;
+  aspect-ratio: 880 / 640;
+  flex-shrink: 0;
+}
+
+.map-wrap {
+  position: relative;
+  flex-direction: column;
+  min-height: 420px;
+}
 
 /* Phase controls remain within reach while inspecting the battlefield. */
-.campaign-bar{position:sticky;top:0;z-index:20;background:#172520;height:auto;min-height:120px;gap:20px;flex-wrap:wrap}
-.phase-controls{display:flex;align-items:center;gap:22px}.lock-control{min-width:190px}.lock-control .primary{font-size:14px;padding:13px 18px}.lock-control small{display:block;text-align:right;color:#b5c2aa;margin-top:8px;font-size:11px}.countdown strong{font-size:28px}.countdown span{font-size:10px}.phase-track small{font-size:10px}.phase-track .active:after{bottom:-18px}
-.panel-heading,.section-label,.eyebrow{font-size:11px}.resource>span{font-size:12px}.resource strong{font-size:26px}.commander strong,.player{font-size:14px}.commander small{font-size:10px}.player small{font-size:9px}.muted,.left-bottom p,.empty-panel p,.report>p{font-size:13px}.unit-card strong{font-size:14px}.unit-card small{font-size:10px}.recruit-button span{font-size:14px}.recruit-button small{font-size:11px}.actions label{font-size:11px}.actions .secondary,.segmented button{font-size:13px}.ration-buttons b,.ration-buttons small{font-size:11px}.dispatch small{font-size:11px}.dispatch p,.phase-banner p{font-size:13px}.phase-banner h3{font-size:16px}.yield-row{font-size:12px}.map-footer{font-size:11px}.territory-name{font-size:17px}.production{font-size:13px}.map-wrap{position:relative;flex-direction:column}.map{flex-shrink:0}
-.simulation-status{align-self:stretch;margin:16px 24px 0;padding:16px 18px;border:1px solid #52614755;background:#e8e1c8;box-shadow:0 5px 20px #34453615}.simulation-heading{display:flex;align-items:center;gap:12px;font-size:15px}.simulation-heading>span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}.spinner{display:inline-block;width:19px;height:19px;border:3px solid #344e3a35;border-top-color:#344e3a;border-radius:50%;animation:loading-spin 1s linear infinite}.simulation-progress{height:6px;background:#344e3a25;margin-top:14px;overflow:hidden;border-radius:4px}.simulation-progress i{height:100%;display:block;background:#567548;transition:width .5s linear}.simulation-status p{font-size:14px;line-height:1.5;margin:12px 0 5px}.simulation-status small{color:#647158;font-size:11px}@keyframes loading-spin{to{transform:rotate(360deg)}}
-@media(max-width:1150px){.phase-track{gap:16px}.phase-controls{gap:15px}.campaign-bar{padding:18px 20px}.lock-control{min-width:170px}.resource-grid{grid-template-columns:1fr}.map-footer{flex-wrap:wrap}}
-@media(max-width:850px){.campaign-bar{gap:14px}.phase-controls{margin-left:auto}.phase-track{order:3;width:100%;justify-content:center}.phase-track .active:after{bottom:-10px}.countdown strong{font-size:22px}.resource-grid{display:grid;grid-template-columns:1fr 1fr}.resource>span{font-size:10px}.resource strong{font-size:21px}}
-@media(max-width:600px){.campaign-bar{padding:12px;gap:10px}.phase-controls{width:100%;justify-content:space-between;order:3}.phase-track{order:2;width:auto}.lock-control{min-width:180px}.countdown strong{font-size:20px}.phase-track .active:after{bottom:-5px}.lock-control small{font-size:10px}.resource-grid{display:flex}.resource>span{font-size:10px}.player{font-size:12px}.simulation-status{margin:12px 12px 0;padding:12px}.simulation-status p{font-size:13px}.map{min-height:290px}}
+.campaign-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #172520;
+  height: auto;
+  min-height: 120px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
 
-.battle-focus{fill:#f9d18922;stroke:#ffe5a4;stroke-width:3;pointer-events:none;animation:pulse 1s ease-in-out infinite}.current-dispatch{border-left:3px solid #d8b87b;padding-left:12px;background:#d8b87b0b}
-.combat-stats{display:grid;gap:5px;margin-top:10px;padding-top:8px;border-top:1px solid #ffffff20;text-align:left}.combat-stats b{font-size:13px;color:#e7cc92;font-weight:600}.combat-stats span{font-size:11px;color:#b6c3a5;line-height:1.6}.battle-army{padding:13px 0;border-bottom:1px solid #ffffff20}.battle-army>strong{font-size:14px}.battle-army>span{font-size:12px;color:#c5d0b8}.damage-change{padding:10px;background:#cd754e18;border-left:3px solid #cd754e;font-size:13px;line-height:1.6}.health i{transition:width .4s ease}.battle-armies{max-height:440px;overflow:auto}.report h3{font-size:15px;line-height:1.6;color:#e7cc92}
+.phase-controls {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
 
-.phase-notice{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100;background:#ead7a5;color:#203329;padding:18px 28px;border:2px solid #d8b87b;border-radius:6px;box-shadow:0 8px 36px #0006;font-size:17px;font-weight:700;max-width:92vw;text-align:center}.dice-stage{padding:24px;background:#203329;border-bottom:1px solid #d8b87b55;text-align:center}.dice-line{display:flex;gap:30px;justify-content:center;flex-wrap:wrap;margin-top:16px}.dice-player{display:grid;gap:8px;min-width:120px}.dice-player strong{font-size:17px}.dice-player small{font-size:14px}.die{font-size:65px;color:#e7cc92;line-height:1.1}.rolling .die{animation:dice-roll .25s linear infinite}.capital-marker{fill:#fff1b4;font-size:11px;font-weight:bold;paint-order:stroke;stroke:#26392e;stroke-width:2px}.panel-heading,.section-label,.eyebrow{font-size:12px}.unit-card strong,.player,.commander strong{font-size:16px}.unit-card small,.combat-stats span,.recruit-button small,.resource>span{font-size:13px}.combat-stats b,.recruit-button span,.muted,.phase-banner p,.dispatch p{font-size:15px}.territory-name{font-size:19px}.production{font-size:15px}.unit-card{padding:15px 10px}.countdown strong{font-size:24px}@keyframes dice-roll{50%{transform:rotate(14deg) scale(1.08)}}@media(prefers-reduced-motion:reduce){.rolling .die{animation:none}}
+.lock-control {
+  min-width: 190px;
+}
+
+.lock-control .primary {
+  font-size: 14px;
+  padding: 13px 18px;
+}
+
+.lock-control small {
+  display: block;
+  text-align: right;
+  color: #b5c2aa;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.countdown strong {
+  font-size: 24px;
+}
+
+.countdown span {
+  font-size: 10px;
+}
+
+.phase-track small {
+  font-size: 10px;
+}
+
+.phase-track .active:after {
+  bottom: -18px;
+}
+
+.panel-heading,
+.section-label,
+.eyebrow {
+  font-size: 12px;
+}
+
+.resource > span {
+  font-size: 12px;
+  min-width: 0;
+}
+
+.resource strong {
+  font-size: 24px;
+}
+
+.commander strong,
+.player,
+.unit-card strong {
+  font-size: 15px;
+}
+
+.commander small {
+  font-size: 10px;
+}
+
+.player small {
+  font-size: 9px;
+}
+
+.left-bottom p,
+.empty-panel p,
+.report > p {
+  font-size: 13px;
+}
+
+.unit-card small,
+.combat-stats span,
+.recruit-button small {
+  font-size: 12px;
+}
+
+.combat-stats b,
+.recruit-button span,
+.muted,
+.phase-banner p,
+.dispatch p {
+  font-size: 14px;
+}
+
+.actions label,
+.ration-buttons b,
+.ration-buttons small,
+.dispatch small,
+.map-footer {
+  font-size: 11px;
+}
+
+.actions .secondary,
+.segmented button {
+  font-size: 13px;
+}
+
+.phase-banner h3 {
+  font-size: 16px;
+}
+
+.yield-row {
+  font-size: 12px;
+}
+
+.territory-name {
+  font-size: 19px;
+  stroke-width: 2px;
+}
+
+.production {
+  font-size: 15px;
+}
+
+.unit-card {
+  padding: 15px 10px;
+}
+
+.simulation-status {
+  align-self: stretch;
+  margin: 16px 24px 0;
+  padding: 16px 18px;
+  border: 1px solid #52614755;
+  background: #e8e1c8;
+  box-shadow: 0 5px 20px #34453615;
+}
+
+.simulation-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+}
+
+.simulation-heading > span:last-child {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.spinner {
+  display: inline-block;
+  width: 19px;
+  height: 19px;
+  border: 3px solid #344e3a35;
+  border-top-color: #344e3a;
+  border-radius: 50%;
+  animation: loading-spin 1s linear infinite;
+}
+
+.spinner.paused {
+  animation: none;
+  border-color: #344e3a77;
+}
+
+.simulation-progress {
+  height: 6px;
+  background: #344e3a25;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.simulation-progress i {
+  height: 100%;
+  display: block;
+  background: #567548;
+}
+
+.simulation-status p {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 12px 0 5px;
+}
+
+.simulation-status small {
+  color: #647158;
+  font-size: 11px;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.battle-focus {
+  fill: #f9d18922;
+  stroke: #ffe5a4;
+  stroke-width: 3;
+  pointer-events: none;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.current-dispatch {
+  border-left: 3px solid #d8b87b;
+  padding-left: 12px;
+  background: #d8b87b0b;
+}
+
+.combat-stats {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #ffffff20;
+  text-align: left;
+}
+
+.combat-stats b {
+  color: #e7cc92;
+  font-weight: 600;
+}
+
+.combat-stats span {
+  color: #b6c3a5;
+  line-height: 1.6;
+}
+
+.battle-army {
+  padding: 13px 0;
+  border-bottom: 1px solid #ffffff20;
+}
+
+.battle-army > strong {
+  font-size: 14px;
+}
+
+.battle-army > span {
+  font-size: 12px;
+  color: #c5d0b8;
+}
+
+.damage-change {
+  padding: 10px;
+  background: #cd754e18;
+  border-left: 3px solid #cd754e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.health i {
+  transition: width 0.4s ease;
+}
+
+.battle-armies {
+  max-height: 440px;
+  overflow: auto;
+}
+
+.report h3 {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #e7cc92;
+}
+
+.phase-notice {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: #ead7a5;
+  color: #203329;
+  padding: 18px 28px;
+  border: 2px solid #d8b87b;
+  border-radius: 6px;
+  box-shadow: 0 8px 36px #0006;
+  font-size: 17px;
+  font-weight: 700;
+  max-width: 92vw;
+  text-align: center;
+}
+
+.dice-stage {
+  padding: 24px;
+  background: #203329;
+  border-bottom: 1px solid #d8b87b55;
+  text-align: center;
+}
+
+.dice-line {
+  display: flex;
+  gap: 30px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.dice-player {
+  display: grid;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.dice-player strong {
+  font-size: 17px;
+}
+
+.dice-player small {
+  font-size: 14px;
+}
+
+.die {
+  font-size: 65px;
+  color: #e7cc92;
+  line-height: 1.1;
+}
+
+.rolling .die {
+  animation: dice-roll 0.25s linear infinite;
+}
+
+.capital-marker {
+  fill: #fff1b4;
+  font-size: 11px;
+  font-weight: bold;
+  paint-order: stroke;
+  stroke: #26392e;
+  stroke-width: 2px;
+}
+
+@keyframes dice-roll {
+  50% {
+    transform: rotate(14deg) scale(1.08);
+  }
+}
+
+/* P2 HUD, Capital Badges, Scrubber, Order Badges, Split Controls & Report Tabs */
+.resource-delta {
+  display: block;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  margin-top: 2px;
+  color: #9dc28c;
+  white-space: nowrap;
+}
+
+.resource-delta.delta-neg {
+  color: #e69d7e;
+}
+
+.capital-status {
+  font-size: 11px;
+  padding: 8px 10px;
+  border-radius: 3px;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+
+.capital-status.active {
+  background: #27402e;
+  border: 1px solid #d8b87b55;
+  color: #f0dfaa;
+}
+
+.capital-status.lost {
+  background: #4e2b20;
+  border: 1px solid #d98d6877;
+  color: #ffd5bd;
+}
+
+.capital-badge {
+  margin: 10px 0 12px;
+  padding: 8px 10px;
+  border-radius: 3px;
+  background: #2b4231;
+  border: 1px solid #d8b87b66;
+  color: #f3e0ab;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.scrubber-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.scrubber-controls {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.scrubber-btn {
+  padding: 5px 10px;
+  border-radius: 3px;
+  background: #344e3a;
+  color: #f1ebcf;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scrubber-btn.primary-scrub {
+  min-width: 78px;
+  background: #243b2a;
+}
+
+.scrubber-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.step-pill {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: #344e3a22;
+  color: #344e3a;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.step-pill.active {
+  background: #344e3a;
+  color: #f4e6b8;
+}
+
+.scrubber-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.scrubber-meta .battle-motion-settings {
+  margin: 0;
+}
+
+.panel-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.panel-tabs button {
+  padding: 9px 8px;
+  border-radius: 3px;
+  background: #22372a;
+  color: #a9b89c;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
+.panel-tabs button.active {
+  background: #d8b87b;
+  color: #202d23;
+}
+
+.order-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: #3b4f33;
+  border: 1px solid #d8b87b66;
+  color: #f7e4ad;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.unit-card.enemy-intel {
+  cursor: default;
+  background: #1d2e25;
+  border-color: #b58b6844;
+}
+
+.split-box {
+  margin-top: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.split-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.split-controls input[type='range'] {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: #d8b87b;
+}
+
+.split-readout {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e7d4a1;
+  white-space: nowrap;
+}
+
+.reserve-warning {
+  padding: 9px 10px;
+  margin-bottom: 10px;
+  border-radius: 3px;
+  background: #4e341f;
+  border: 1px solid #e1a86b66;
+  color: #ffe2bd;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Responsive Overrides (strictly after base rules so cascade works cleanly) */
+@media (min-width: 1600px) {
+  .map {
+    max-height: none;
+  }
+}
+
+@media (max-width: 1599px) {
+  .resource-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 1150px) {
+  .phase-track {
+    gap: 16px;
+  }
+  .phase-controls {
+    gap: 15px;
+  }
+  .campaign-bar {
+    padding: 18px 20px;
+  }
+  .lock-control {
+    min-width: 170px;
+  }
+  .map-footer {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 850px) {
+  .campaign-bar {
+    gap: 14px;
+  }
+  .phase-controls {
+    margin-left: auto;
+  }
+  .phase-track {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+  .phase-track .active:after {
+    bottom: -10px;
+  }
+  .countdown strong {
+    font-size: 22px;
+  }
+  .resource-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .resource > span {
+    font-size: 11px;
+  }
+  .resource strong {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .campaign-bar {
+    padding: 12px;
+    gap: 10px;
+  }
+  .phase-controls {
+    width: 100%;
+    justify-content: space-between;
+    order: 3;
+  }
+  .phase-track {
+    order: 2;
+    width: auto;
+  }
+  .lock-control {
+    min-width: 180px;
+  }
+  .countdown strong {
+    font-size: 20px;
+  }
+  .phase-track .active:after {
+    bottom: -5px;
+  }
+  .lock-control small {
+    font-size: 10px;
+  }
+  .resource-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 8px;
+  }
+  .resource > span {
+    font-size: 10px;
+  }
+  .resource strong {
+    font-size: 18px;
+  }
+  .resource-delta {
+    font-size: 9px;
+  }
+  .player {
+    font-size: 12px;
+  }
+  .simulation-status {
+    margin: 12px 12px 0;
+    padding: 12px;
+  }
+  .simulation-status p {
+    font-size: 13px;
+  }
+  .map,
+  .map-wrap {
+    min-height: 290px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rolling .die {
+    animation: none;
+  }
+}

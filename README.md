@@ -14,10 +14,10 @@ For frontend development, run `npm run dev` alongside the Go server. Vite proxie
 
 Create a room, invite another player or add bot commanders, and start. Server dice determine draft order. Claim territories in snake order (`A → B → C → D → D → C → B → A`). Each claimed territory starts with four infantry.
 
-- **Plan (90s):** select an army and an adjacent destination. Friendly-sector transfers are free; attacks/neutral advances spend currency. Artillery can bombard across one border (firing after movement). Hold & defend entrenches the army (+20% direct combat, −25% bombardment taken). Lock when done; everyone ready ends the phase early.
-- **Simulate (at least 15s):** all orders resolve and the full map is revealed. A playback progress bar reveals field dispatches and highlights the current engagement. All active commanders can lock in to skip the remaining playback.
-- **Gather (no time limit):** territory income is credited at entry. Recruit, reinforce, merge matching unfed armies, and allocate rations. Unfed armies receive automatic normal/minimum rations on lock when affordable. Every active commander must lock in to advance the round; there is no Gather deadline.
-- Most territories after 20 rounds wins; ties are shared. Owning the whole map also ends the campaign.
+- **Plan (90s):** select an army and an adjacent destination. Friendly-sector transfers are free; attacks/neutral advances spend currency. Artillery defaults to Bombard across one border (firing after movement). Hold & defend entrenches the army (+20% direct combat, −25% bombardment taken). You can also split stacks (up to 4 stacks per sector). Lock when done; everyone ready ends the phase early.
+- **Simulate (at least 12s, 3s per frame):** all orders resolve within 1-hop Line of Sight. A playback scrubber lets you pause or step through frames while field dispatches highlight each engagement. All active commanders can lock in to skip the remaining playback.
+- **Gather (120s):** territory income plus Capital HQ bonuses (+4 currency, +2 humans while held) are credited at entry. Recruit, reinforce, split, merge matching unfed armies (max 4 stacks per sector), and allocate rations. Review the Last Round report tab anytime. Unfed armies auto-feed when all commanders lock in or the timer expires.
+- Highest **Victory Points (`Territories + 2 × Capitals Controlled`)** after 20 rounds wins; ties break on territories then capitals. Owning the whole map also ends the campaign.
 
 Lock-in buttons and the active commander readiness count appear beside the timer in the sticky top bar. Eliminated commanders (no territory and no surviving armies) do not count toward phase readiness. Plan retains its 90-second limit but advances immediately when all active commanders lock in.
 
@@ -40,8 +40,9 @@ These fill decisions that were still open in the design conversation; they are a
 | Minimum food | 0.5 per troop/piece, rounded up; 65% attack |
 | Extra food | 1.5 per troop/piece, rounded up; +20 health, capped at 100 |
 | Starvation | -25 health (minimum 1), 30% attack |
-| Merging | Same owner/type/territory, both unfed; troop-weighted health |
-| Reinforcement | Same resource cost per added troop/piece as recruitment; troop-weighted health (new troops enter at 100); up to 6 armies per sector |
+| Merging & Splitting | Merge same owner/type/territory (both unfed, weighted health); split in Gather (unfed) or Plan (clears order); max 4 stacks per sector |
+| Reinforcement | Same resource cost per added troop/piece as recruitment; troop-weighted health (new troops enter at 100); up to 4 armies per sector |
+| Capitals | 45s concealed pick; holding your own capital grants +4 currency, +2 humans, and +15% direct defense in destination battles; each controlled capital awards +2 VP |
 | Captured production | Available in the immediately following Gather |
 
 Combined-arms combat is deterministic: troop count × base attack × health fraction × ration modifier × matchup × entrenchment. Base attack is infantry 2, tank 6, ranged artillery 4, direct artillery 1. Tanks receive ×1.4 against infantry; infantry/tanks receive ×1.5 against artillery; ranged artillery receives ×1.5 against tanks and ×1.2 against infantry. Damage is HP-weighted across opposing stacks and applied simultaneously within each encounter; each 10 / 14 / 20 damage kills one infantry / artillery / tank and scales stack health proportionally. Border-crossing opponents clash and hold their origins. Border clashes resolve first, then movement, then artillery bombardment (allowing backline artillery to shell incoming attackers; exposed artillery overrun by enemies in Stage 2 is suppressed in melee), then destination battles and retreats. Destination losers retreat after all ownership resolves, or are removed if no friendly neighboring destination exists. In a tie, an incumbent defending garrison holds its sector; tied attackers in an unowned or third-party sector retreat and ownership stays unchanged. Campaigns end immediately after Simulate when round 20 completes or one commander holds the entire continent.
@@ -50,13 +51,14 @@ Combined-arms combat is deterministic: troop count × base attack × health frac
 
 - `server/game.go`: authoritative rules, generation, commands, timers, and combat.
 - `server/bot.go`: scored snake drafting, capital selection, combined-arms Gather management, and threat-aware Plan orders.
+- `server/fog.go`: 1-hop Line-of-Sight visibility filtering across Plan, Simulate, and Gather, plus Last Round report filtering.
 - `server/main.go`: HTTP/WebSocket lobby server and player-specific state filtering.
-- `src/main.tsx`: React interface, SVG territory/army assets, orders, recruitment and feeding.
+- `src/`: modular React interface (`src/App.tsx`, `src/combat.ts`, `src/types.ts`, `src/components/*`), SVG territory/army assets, orders, playback scrubber, and recruitment/feeding controls.
 - Match state is **in memory**. Server restart loses lobbies; SQLite persistence is deferred.
 - Reconnect uses a private token in browser session storage. Refresh restores the same seat while the server remains running. A tab has its own session; use separate browsers/devices to play multiple humans.
 - Accepted command IDs are deduplicated within a connection. The client does not automatically replay mutations across reconnects; it requests a fresh authoritative state.
 - Server serializes mutations under a mutex. Independent lobby actors and horizontal scaling are deferred.
-- During Plan/Gather enemy ownership, units, orders and yields are omitted; geography remains visible as targetable outlines. Full information is revealed during Simulate. Previously revealed information cannot be made secret again.
+- 1-hop Line of Sight applies across Plan, Simulate, and Gather: static terrain yields stay visible everywhere, while enemy ownership, capitals, units, orders, and simulation dispatches are only transmitted for sectors within 1 border of your territories or armies. Eliminated spectators and finished campaigns receive full visibility.
 - Bot commanders score contiguous/balanced drafts, recruit combined arms with currency and food reserves, heal wounded stacks, bombard armor/threats, entrench outnumbered fronts, and push rear armies forward.
 - No accounts, diplomacy, public matchmaking, map editor, audio, or database persistence yet.
 - Visual assets are original code-generated SVG/CSS. Fonts request Google Fonts with local fallbacks.
@@ -116,7 +118,7 @@ Army cards show current direct combat strength, matchup values, entrenchment sta
 
 ## Four-territory setup and capitals
 
-The server reveals one commander’s dice result every two seconds, rerolling ties. Highest roll drafts first. Players claim four tiles each in snake order (`A → B → C → D → D → C → B → A`); remaining tiles are neutral, yield no player income until captured, and have no garrisons. Each commander then confirms one of their own four tiles as capital. Bots choose automatically. Capital selection has no timer. Starting infantry is placed only on drafted tiles. Capitals are markers without special income, defense, or elimination rules yet. Normal movement into a neutral tile captures it during Simulate, subject to competing arrivals. Matches run for 20 rounds.
+The server reveals one commander’s dice result every two seconds, rerolling ties. Highest roll drafts first. Players claim four tiles each in snake order (`A → B → C → D → D → C → B → A`); remaining tiles are neutral, yield no player income until captured, and have no garrisons. Each commander then confirms one of their own four tiles as capital within 45 seconds (rival picks stay concealed until Round 1 starts; bots and AFK timeouts pick their most sheltered tile automatically). Holding your own capital yields +4 currency and +2 humans each Gather and grants +15% direct combat defense in destination battles (+38% stacked with Hold & defend). Each controlled capital (yours or captured) adds +2 VP to your final score. Starting infantry is placed only on drafted tiles. Normal movement into a neutral tile captures it during Simulate, subject to competing arrivals. Matches run for 20 rounds.
 
 ## Integrated gameplay animations
 

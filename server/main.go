@@ -29,22 +29,27 @@ type hub struct {
 }
 
 func (g *Game) view(id string) map[string]any {
-	public := g.Phase == "simulate" || g.Phase == "draft" || g.Phase == "lobby" || g.Phase == "roll" || g.Phase == "capital" || g.Phase == "finished"
+	full := g.fullVisibility(id)
+	vis := g.visibleSectors(id)
+	if g.Phase == "simulate" {
+		vis = g.simulateVisibleSectors(id)
+	}
 	ts := make([]Territory, len(g.Territories))
 	copy(ts, g.Territories)
 	for i := range ts {
-		ts[i].Neutral = ts[i].Owner == ""
-		if !public && ts[i].Owner != id && ts[i].Owner != "" {
-			ts[i].Resource = ""
-			ts[i].Yield = 0
-			ts[i].Humans = 0
-			ts[i].Currency = 0
+		ts[i].Visible = vis[i]
+		if vis[i] {
+			ts[i].Neutral = ts[i].Owner == ""
+			ts[i].IsCapital = g.isCapitalSector(i) && !(g.Phase == "capital" && ts[i].Owner != id)
+		} else {
+			ts[i].Neutral = false
 			ts[i].Owner = ""
+			ts[i].IsCapital = false
 		}
 	}
 	us := []*Unit{}
 	for _, u := range g.Units {
-		if public || u.Owner == id {
+		if u.Owner == id || vis[u.Territory] {
 			copyUnit := *u
 			us = append(us, &copyUnit)
 		}
@@ -55,27 +60,42 @@ func (g *Game) view(id string) map[string]any {
 		cp.Eliminated = g.eliminated(p.ID)
 		if p.ID != id {
 			cp.Resources = Resources{}
+			if g.Phase == "capital" || (cp.Capital >= 0 && !vis[cp.Capital]) {
+				cp.Capital = -1
+			}
+		}
+		if p.ID == id || full {
+			vp, _, _ := g.playerScore(p.ID)
+			cp.VP = vp
 		}
 		ps = append(ps, cp)
 	}
 	orders := map[string]Order{}
-	for key, o := range g.Orders {
-		if g.Phase == "simulate" {
-			orders[key] = o
-			continue
-		}
-		u := g.unit(key)
-		if u != nil && (public || u.Owner == id) {
-			orders[key] = o
+	if g.Phase == "simulate" {
+		orders = g.filterSimulateOrders(id, vis)
+	} else {
+		for key, o := range g.Orders {
+			u := g.unit(key)
+			if u != nil && u.Owner == id {
+				orders[key] = o
+			}
 		}
 	}
 	events := []Event{}
-	if public {
-		events = g.Events
-	}
 	timeline := []BattleFrame{}
 	if g.Phase == "simulate" {
-		timeline = g.Timeline
+		events = filterEvents(g.Events, vis)
+		timeline = g.filterTimeline(id, vis)
+	} else if g.Phase == "finished" {
+		events = append([]Event{}, g.Events...)
+	}
+	lastEvents := []Event{}
+	if (g.Phase == "gather" || g.Phase == "plan") && len(g.LastEvents) > 0 {
+		if full {
+			lastEvents = append([]Event{}, g.LastEvents...)
+		} else if lv, ok := g.LastSimVis[id]; ok {
+			lastEvents = filterEvents(g.LastEvents, lv)
+		}
 	}
 	turn := ""
 	if g.Phase == "draft" {
@@ -83,7 +103,29 @@ func (g *Game) view(id string) map[string]any {
 			turn = dp.ID
 		}
 	}
-	return map[string]any{"rollIndex": g.RollIndex, "timeline": timeline, "simulationDuration": max(12, len(g.Timeline)*3) * 1000, "code": g.Code, "host": g.Host, "phase": g.Phase, "round": g.Round, "deadline": g.Deadline, "players": ps, "territories": ts, "units": us, "orders": orders, "events": events, "turn": turn, "winner": g.Winner, "reserved": g.reserved(id, "")}
+	simDuration := 0
+	if g.Phase == "simulate" {
+		simDuration = max(12, len(timeline)*3) * 1000
+	}
+	return map[string]any{
+		"rollIndex":          g.RollIndex,
+		"timeline":           timeline,
+		"simulationDuration": simDuration,
+		"code":               g.Code,
+		"host":               g.Host,
+		"phase":              g.Phase,
+		"round":              g.Round,
+		"deadline":           g.Deadline,
+		"players":            ps,
+		"territories":        ts,
+		"units":              us,
+		"orders":             orders,
+		"events":             events,
+		"lastEvents":         lastEvents,
+		"turn":               turn,
+		"winner":             g.Winner,
+		"reserved":           g.reserved(id, ""),
+	}
 }
 func (h *hub) send(c *client, v any) {
 	select {
@@ -142,31 +184,40 @@ func (h *hub) handle(c *client, cmd Command) {
 			var g *Game
 			var p *Player
 			if cmd.Action == "create" {
-				code := strings.ToUpper(uid()[:6])
-				g = newGame(code)
-				h.games[code] = g
-			} else {
-				g = h.games[strings.ToUpper(strings.TrimSpace(cmd.Code))]
-			}
-			if g == nil {
-				err = fmt.Errorf("Lobby not found")
-			} else if cmd.Action == "resume" {
-				for _, candidate := range g.Players {
-					if candidate.Token == cmd.Token && cmd.Token != "" {
-						p = candidate
-					}
-				}
-				if p == nil {
-					err = fmt.Errorf("Session expired")
-				}
-			} else if g.Phase != "lobby" || len(g.Players) >= 4 {
-				err = fmt.Errorf("Lobby is full or match has started")
-			} else {
 				name := strings.TrimSpace(cmd.Name)
 				if len(name) < 1 || len(name) > 24 {
 					err = fmt.Errorf("Enter a name of 1–24 characters")
 				} else {
+					code := strings.ToUpper(uid()[:6])
+					for h.games[code] != nil {
+						code = strings.ToUpper(uid()[:6])
+					}
+					g = newGame(code)
 					p = g.addPlayer(name, false)
+					h.games[code] = g
+				}
+			} else {
+				g = h.games[strings.ToUpper(strings.TrimSpace(cmd.Code))]
+				if g == nil {
+					err = fmt.Errorf("Lobby not found")
+				} else if cmd.Action == "resume" {
+					for _, candidate := range g.Players {
+						if candidate.Token == cmd.Token && cmd.Token != "" {
+							p = candidate
+						}
+					}
+					if p == nil {
+						err = fmt.Errorf("Session expired")
+					}
+				} else if g.Phase != "lobby" || len(g.Players) >= 4 {
+					err = fmt.Errorf("Lobby is full or match has started")
+				} else {
+					name := strings.TrimSpace(cmd.Name)
+					if len(name) < 1 || len(name) > 24 {
+						err = fmt.Errorf("Enter a name of 1–24 characters")
+					} else {
+						p = g.addPlayer(name, false)
+					}
 				}
 			}
 			if err == nil {

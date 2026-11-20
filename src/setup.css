@@ -1,30 +1,270 @@
 /* Keep initiative rolls visible even when Start was clicked below the fold. */
-.dice-stage{position:fixed;z-index:45;top:150px;left:50%;transform:translateX(-50%);width:min(760px,94vw);max-height:65vh;overflow:auto;border:2px solid #d8b87b88;border-radius:8px;box-shadow:0 24px 100px #07150ecc}
-@media(max-width:600px){.dice-stage{top:100px;padding:20px 12px}.dice-line{gap:18px}.dice-player{min-width:100px}.phase-notice{font-size:14px;padding:14px 18px}}
+.dice-stage {
+  position:fixed;
+  z-index:45;
+  top:150px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(760px,94vw);
+  max-height:65vh;
+  overflow:auto;
+  border:2px solid #d8b87b88;
+  border-radius:8px;
+  box-shadow:0 24px 100px #07150ecc
+}
 
-.exit-round{background:#aa5a3d22;border:1px solid #cf8e6866;color:#edbf9b;padding:10px 14px;border-radius:3px;font-size:13px;white-space:nowrap}.exit-actions{display:flex;gap:12px;margin-top:24px}.exit-confirm{background:#bb7350!important;color:#fff1d5!important}.exit-dialog h2{margin-top:0}.exit-dialog{width:min(560px,94vw)}@media(max-width:600px){.exit-actions{flex-direction:column}.exit-round{padding:8px;font-size:11px}.top-right{flex-wrap:wrap}.topbar{height:auto;min-height:72px;gap:12px;padding-top:12px;padding-bottom:12px}}
+@media(max-width:600px) {
+  .dice-stage {
+    top:100px;
+    padding:20px 12px
+  }
+  .dice-line {
+    gap:18px
+  }
+  .dice-player {
+    min-width:100px
+  }
+  .phase-notice {
+    font-size:14px;
+    padding:14px 18px
+  }
+}
 
-.disconnect-banner{padding:14px 24px;background:#6b482b;color:#fff0cf;font-size:14px;line-height:1.6;border-bottom:1px solid #e6bd6c}.player b{white-space:nowrap;font-size:11px}
+.exit-round {
+  background:#aa5a3d22;
+  border:1px solid #cf8e6866;
+  color:#edbf9b;
+  padding:10px 14px;
+  border-radius:3px;
+  font-size:13px;
+  white-space:nowrap
+}
+
+.exit-actions {
+  display:flex;
+  gap:12px;
+  margin-top:24px
+}
+
+.exit-confirm {
+  background:#bb7350!important;
+  color:#fff1d5!important
+}
+
+.exit-dialog h2 {
+  margin-top:0
+}
+
+.exit-dialog {
+  width:min(560px,94vw)
+}
+
+@media(max-width:600px) {
+  .exit-actions {
+    flex-direction:column
+  }
+  .exit-round {
+    padding:8px;
+    font-size:11px
+  }
+  .top-right {
+    flex-wrap:wrap
+  }
+  .topbar {
+    height:auto;
+    min-height:72px;
+    gap:12px;
+    padding-top:12px;
+    padding-bottom:12px
+  }
+}
+
+.disconnect-banner {
+  padding:14px 24px;
+  background:#6b482b;
+  color:#fff0cf;
+  font-size:14px;
+  line-height:1.6;
+  border-bottom:1px solid #e6bd6c
+}
+
+.player b {
+  white-space:nowrap;
+  font-size:11px
+}
 
 /* Keep active player turn clearly visible during territory selection without scrolling. */
-.draft-turn{display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:4px;background:#213429;border:1px solid #d8b87b44;border-left:4px solid var(--turn-color,#d8b87b);min-width:220px}
-.draft-turn-dot{width:10px;height:10px;border-radius:50%;background:var(--turn-color,#d8b87b);flex-shrink:0;box-shadow:0 0 0 2px #172520}
-.draft-turn>div{min-width:0}
-.draft-turn>div>span{display:block;font-size:10px;letter-spacing:1.2px;font-weight:700;color:#b6c4ab}
-.draft-turn>div>strong{display:block;font-size:15px;font-weight:700;color:#f1ecd8;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.draft-turn.my-turn{background:#d8b87b;border-color:#f3dca5;border-left-color:var(--turn-color,#243026);box-shadow:0 0 0 1px #f3dca555,0 8px 24px #08150e66;animation:draft-turn-pulse 2.2s ease-in-out infinite}
-.draft-turn.my-turn .draft-turn-dot{box-shadow:0 0 0 2px #1e2d23}
-.draft-turn.my-turn>div>span{color:#2c3a2d}
-.draft-turn.my-turn>div>strong{color:#16221b}
-@keyframes draft-turn-pulse{50%{box-shadow:0 0 0 3px #f3dca577,0 8px 28px #08150e88}}
-.player.active-turn{background:#d8b87b1a;border-left:3px solid var(--turn-color,#d8b87b);padding:10px 8px;margin:2px -8px;border-radius:3px}
-.turn-tag{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:2px;font-style:normal;font-size:9px;font-weight:700;letter-spacing:.8px;background:#d8b87b;color:#1b2820;vertical-align:middle}
-.draft-map-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.8px;background:#26362b;color:#eae5cf;border:1px solid #26362b}
-.draft-map-badge i{width:8px;height:8px;border-radius:50%;background:var(--turn-color,#d8b87b);flex-shrink:0}
-.draft-map-badge.my-turn{background:#223528;color:#f6e3ae;border-color:#9e7f42;box-shadow:0 2px 10px #22352833}
-.territory.claimable polygon{stroke:#f6e2a5;stroke-width:2.2}
-.territory.claimable:hover polygon,.territory.claimable:focus-visible polygon{stroke:#fff3c4;stroke-width:3.5;fill-opacity:.92}
-@media(max-width:1150px){.draft-turn{min-width:190px;padding:8px 12px}}
-@media(max-width:850px){.map-top{flex-wrap:wrap;gap:10px}}
-@media(max-width:600px){.draft-turn{flex:1;min-width:0;padding:8px 10px;gap:8px}.draft-turn>div>span{font-size:9px}.draft-turn>div>strong{font-size:13px}.player.active-turn{margin:0;padding:5px 8px}.draft-map-badge{font-size:10px;padding:6px 10px}}
-@media(prefers-reduced-motion:reduce){.draft-turn.my-turn{animation:none}}
+.draft-turn {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 16px;
+  border-radius:4px;
+  background:#213429;
+  border:1px solid #d8b87b44;
+  border-left:4px solid var(--turn-color,#d8b87b);
+  min-width:220px
+}
+
+.draft-turn-dot {
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--turn-color,#d8b87b);
+  flex-shrink:0;
+  box-shadow:0 0 0 2px #172520
+}
+
+.draft-turn>div {
+  min-width:0
+}
+
+.draft-turn>div>span {
+  display:block;
+  font-size:10px;
+  letter-spacing:1.2px;
+  font-weight:700;
+  color:#b6c4ab
+}
+
+.draft-turn>div>strong {
+  display:block;
+  font-size:15px;
+  font-weight:700;
+  color:#f1ecd8;
+  margin-top:2px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.draft-turn.my-turn {
+  background:#d8b87b;
+  border-color:#f3dca5;
+  border-left-color:var(--turn-color,#243026);
+  box-shadow:0 0 0 1px #f3dca555,0 8px 24px #08150e66;
+  animation:draft-turn-pulse 2.2s ease-in-out infinite
+}
+
+.draft-turn.my-turn .draft-turn-dot {
+  box-shadow:0 0 0 2px #1e2d23
+}
+
+.draft-turn.my-turn>div>span {
+  color:#2c3a2d
+}
+
+.draft-turn.my-turn>div>strong {
+  color:#16221b
+}
+
+@keyframes draft-turn-pulse {
+  50% {
+    box-shadow:0 0 0 3px #f3dca577,0 8px 28px #08150e88
+  }
+}
+
+.player.active-turn {
+  background:#d8b87b1a;
+  border-left:3px solid var(--turn-color,#d8b87b);
+  padding:10px 8px;
+  margin:2px -8px;
+  border-radius:3px
+}
+
+.turn-tag {
+  display:inline-block;
+  margin-left:6px;
+  padding:2px 6px;
+  border-radius:2px;
+  font-style:normal;
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.8px;
+  background:#d8b87b;
+  color:#1b2820;
+  vertical-align:middle
+}
+
+.draft-map-badge {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  border-radius:3px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.8px;
+  background:#26362b;
+  color:#eae5cf;
+  border:1px solid #26362b
+}
+
+.draft-map-badge i {
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--turn-color,#d8b87b);
+  flex-shrink:0
+}
+
+.draft-map-badge.my-turn {
+  background:#223528;
+  color:#f6e3ae;
+  border-color:#9e7f42;
+  box-shadow:0 2px 10px #22352833
+}
+
+.territory.claimable polygon {
+  stroke:#f6e2a5;
+  stroke-width:2.2
+}
+
+.territory.claimable:hover polygon,.territory.claimable:focus-visible polygon {
+  stroke:#fff3c4;
+  stroke-width:3.5;
+  fill-opacity:.92
+}
+
+@media(max-width:1150px) {
+  .draft-turn {
+    min-width:190px;
+    padding:8px 12px
+  }
+}
+
+@media(max-width:850px) {
+  .map-top {
+    flex-wrap:wrap;
+    gap:10px
+  }
+}
+
+@media(max-width:600px) {
+  .draft-turn {
+    flex:1;
+    min-width:0;
+    padding:8px 10px;
+    gap:8px
+  }
+  .draft-turn>div>span {
+    font-size:9px
+  }
+  .draft-turn>div>strong {
+    font-size:13px
+  }
+  .player.active-turn {
+    margin:0;
+    padding:5px 8px
+  }
+  .draft-map-badge {
+    font-size:10px;
+    padding:6px 10px
+  }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .draft-turn.my-turn {
+    animation:none
+  }
+}

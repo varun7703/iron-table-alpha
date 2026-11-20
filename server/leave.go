@@ -37,6 +37,11 @@ func (g *Game) leave(id string) error {
 	for i := range g.Territories {
 		if g.Territories[i].Owner == id {
 			g.Territories[i].Owner = ""
+			// Only remove capital status if the leaving player still held this capital;
+			// already-conquered capitals remain on the map for the conqueror's VP.
+			if g.Players[index].Capital == i {
+				g.Territories[i].IsCapital = false
+			}
 		}
 	}
 	// Do not replay a surrendered player's armies or ownership on remaining clients.
@@ -93,9 +98,12 @@ func (g *Game) leave(id string) error {
 	if setup && len(g.Players) < 2 {
 		for i := range g.Territories {
 			g.Territories[i].Owner = ""
+			g.Territories[i].IsCapital = false
 		}
 		g.Units = []*Unit{}
 		g.Orders = map[string]Order{}
+		g.LastEvents = nil
+		g.LastSimVis = nil
 		g.Draft = 0
 		g.RollIndex = 0
 		for _, p := range g.Players {
@@ -132,8 +140,13 @@ func (g *Game) leave(id string) error {
 		g.Orders = map[string]Order{}
 		g.Timeline = []BattleFrame{}
 		g.Events = []Event{}
+		g.LastEvents = nil
+		g.LastSimVis = nil
 		g.recordFrame(name + " exited · armies dissolved and territories neutralized")
 		g.Deadline = time.Now().Add(12 * time.Second).UnixMilli()
+	}
+	if g.LastSimVis != nil {
+		delete(g.LastSimVis, id)
 	}
 	active := 0
 	for _, p := range g.Players {
@@ -148,7 +161,7 @@ func (g *Game) leave(id string) error {
 	} else if active == 1 {
 		g.finish()
 	} else {
-		if g.Phase == "plan" {
+		if g.Phase == "plan" || g.Phase == "simulate" {
 			for _, p := range g.Players {
 				if !p.Bot {
 					p.Ready = false

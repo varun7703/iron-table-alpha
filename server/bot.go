@@ -121,6 +121,20 @@ func (g *Game) enemyPowerAt(tid int, owner string) float64 {
 	return total
 }
 
+func (g *Game) enemyDefenseAt(tid int, owner string) float64 {
+	total := 0.0
+	for _, u := range g.Units {
+		if u.Territory == tid && u.Owner != owner && u.Count > 0 {
+			total += attack(u, "", true) * g.capitalBonus(u, tid, true)
+		}
+	}
+	return total
+}
+
+func (g *Game) isEnemyCapital(tid int, owner string) bool {
+	return g.isCapitalSector(tid) && g.Territories[tid].Owner != "" && g.Territories[tid].Owner != owner
+}
+
 func (g *Game) enemyHasTanksAt(tid int, owner string) bool {
 	for _, u := range g.Units {
 		if u.Territory == tid && u.Owner != owner && u.Type == "tank" && u.Count > 0 {
@@ -159,16 +173,6 @@ func (g *Game) sectorHasArtillery(tid int, owner string) bool {
 		}
 	}
 	return false
-}
-
-func (g *Game) sectorStackCount(tid int) int {
-	n := 0
-	for _, u := range g.Units {
-		if u.Territory == tid && u.Count > 0 {
-			n++
-		}
-	}
-	return n
 }
 
 func (g *Game) expectedMatchupPower(stacks []*Unit, targetTile int, owner string) float64 {
@@ -272,6 +276,9 @@ func (g *Game) botGatherWithSnapshot(p *Player, snapshot []Unit) {
 		if hasEnemy {
 			isFront[t.ID] = true
 			score := adjEnemyPower - 0.4*g.sectorOwnPower(t.ID, p.ID) + 0.3*float64(t.Yield)
+			if t.ID == p.Capital {
+				score += 6.0
+			}
 			frontTiles = append(frontTiles, scoredTile{t.ID, score})
 		}
 		if hasNeutral {
@@ -404,7 +411,7 @@ func (g *Game) botGatherWithSnapshot(p *Player, snapshot []Unit) {
 					return true
 				}
 			}
-			if g.sectorStackCount(tid) < 6 {
+			if g.sectorStackCount(tid) < maxStacksPerSector {
 				if !spend(p, c) {
 					return false
 				}
@@ -664,6 +671,8 @@ func (g *Game) botOrders() {
 			}
 			threat := g.sectorThreat(tid, p.ID)
 			protectArt := threat > 0 && g.sectorHasArtillery(tid, p.ID)
+			protectCap := tid == p.Capital && threat > 0
+			mustGuard := protectArt || protectCap
 
 			bestEnemy, bestEnemyScore := -1, -1e9
 			bestEmptyEnemy, bestEmptyEnemyScore := -1, -1e9
@@ -687,12 +696,15 @@ func (g *Game) botOrders() {
 					}
 					continue
 				}
-				ePower := g.enemyPowerAt(n, p.ID)
-				if ePower == 0 {
+				eDefense := g.enemyDefenseAt(n, p.ID)
+				if eDefense == 0 {
 					if claimedUndefended[n] {
 						continue
 					}
 					sc := float64(nt.Yield) + 6.0
+					if g.isEnemyCapital(n, p.ID) {
+						sc += 8.0
+					}
 					if sc > bestEmptyEnemyScore {
 						bestEmptyEnemyScore = sc
 						bestEmptyEnemy = n
@@ -701,8 +713,11 @@ func (g *Game) botOrders() {
 				}
 				offense := g.expectedMatchupPower(stacks, n, p.ID) + artSupport[n]*0.35
 				// Require 1.25x matchup-adjusted advantage to beat potential +20% entrenchment.
-				if offense >= ePower*1.25 {
-					sc := (offense - ePower) + float64(nt.Yield)*0.8
+				if offense >= eDefense*1.25 {
+					sc := (offense - eDefense) + float64(nt.Yield)*0.8
+					if g.isEnemyCapital(n, p.ID) {
+						sc += 8.0
+					}
 					if sc > bestEnemyScore {
 						bestEnemyScore = sc
 						bestEnemy = n
@@ -710,14 +725,30 @@ func (g *Game) botOrders() {
 				}
 			}
 
+			// 2a-pre. Seize an adjacent undefended enemy capital before fighting a garrisoned non-capital.
+			if bestEmptyEnemy >= 0 && g.isEnemyCapital(bestEmptyEnemy, p.ID) && (bestEnemy < 0 || !g.isEnemyCapital(bestEnemy, p.ID)) {
+				if len(stacks) > 1 || (!mustGuard && threat <= ownPower*0.8) {
+					for i := len(stacks) - 1; i >= 0; i-- {
+						if g.commandBot(stacks[i], "move", bestEmptyEnemy) {
+							claimedUndefended[bestEmptyEnemy] = true
+							stacks = append(append([]*Unit{}, stacks[:i]...), stacks[i+1:]...)
+							break
+						}
+					}
+				}
+			}
+			if len(stacks) == 0 {
+				continue
+			}
+
 			// 2a. Decisive attack on a garrisoned enemy sector.
 			if bestEnemy >= 0 {
-				ePower := g.enemyPowerAt(bestEnemy, p.ID)
-				// If protecting stationed artillery from other enemies, keep at least 1 garrison stack.
+				eDefense := g.enemyDefenseAt(bestEnemy, p.ID)
+				// Protect stationed artillery or own threatened capital by keeping at least 1 garrison stack.
 				attackPool := stacks
-				if protectArt && len(stacks) > 1 {
+				if mustGuard && len(stacks) > 1 {
 					attackPool = stacks[:len(stacks)-1]
-				} else if protectArt && threat > ePower*1.05 {
+				} else if mustGuard && threat > eDefense*1.05 {
 					attackPool = nil
 				}
 				affordable := []*Unit{}
@@ -729,7 +760,7 @@ func (g *Game) botOrders() {
 						affordable = append(affordable, u)
 					}
 				}
-				if len(affordable) > 0 && g.expectedMatchupPower(affordable, bestEnemy, p.ID)+artSupport[bestEnemy]*0.35 >= ePower*1.25 {
+				if len(affordable) > 0 && g.expectedMatchupPower(affordable, bestEnemy, p.ID)+artSupport[bestEnemy]*0.35 >= eDefense*1.25 {
 					sent := map[string]bool{}
 					for _, u := range affordable {
 						if g.commandBot(u, "move", bestEnemy) {
@@ -747,12 +778,12 @@ func (g *Game) botOrders() {
 
 			// 2b. Opportunistic single-stack capture of an undefended enemy or neutral tile.
 			freeTarget := bestEmptyEnemy
-			if freeTarget < 0 {
+			if freeTarget < 0 || claimedUndefended[freeTarget] {
 				freeTarget = bestNeutral
 			}
-			if freeTarget >= 0 {
-				// Never abandon stationed artillery or a heavily threatened sector with our only stack.
-				if len(stacks) == 1 && (protectArt || threat > ownPower*0.8) {
+			if freeTarget >= 0 && !claimedUndefended[freeTarget] {
+				// Never abandon stationed artillery, a threatened capital, or a heavily threatened sector with our only stack.
+				if len(stacks) == 1 && (mustGuard || threat > ownPower*0.8) {
 					g.commandBot(stacks[0], "defend", tid)
 					continue
 				}

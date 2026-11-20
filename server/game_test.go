@@ -75,19 +75,33 @@ func TestMovementBudgetAndLock(t *testing.T) {
 func TestFogDoesNotLeak(t *testing.T) {
 	g := fixture()
 	a, b := g.Players[0], g.Players[1]
-	g.Units = []*Unit{{ID: "enemy", Owner: b.ID, Type: "tank", Territory: 12, Count: 8, Health: 100, Ration: 1}}
-	g.Orders["enemy"] = Order{"enemy", "move", 6}
+	// Tile 12 is 1-hop adjacent to Alpha's tile 6; tile 18 is 2 hops away (fogged).
+	g.Units = []*Unit{
+		{ID: "adj", Owner: b.ID, Type: "tank", Territory: 12, Count: 4, Health: 100, Ration: 1},
+		{ID: "far", Owner: b.ID, Type: "tank", Territory: 18, Count: 8, Health: 100, Ration: 1},
+	}
+	g.Orders["adj"] = Order{"adj", "move", 6}
+	g.Orders["far"] = Order{"far", "move", 19}
 	v := g.view(a.ID)
-	if len(v["units"].([]*Unit)) != 0 || len(v["orders"].(map[string]Order)) != 0 {
-		t.Fatal("Enemy military leaked")
+	us := v["units"].([]*Unit)
+	if len(us) != 1 || us[0].ID != "adj" {
+		t.Fatalf("Expected only 1-hop adjacent enemy unit visible, got %d", len(us))
+	}
+	if len(v["orders"].(map[string]Order)) != 0 {
+		t.Fatal("Enemy orders leaked during Plan")
 	}
 	ts := v["territories"].([]Territory)
-	if ts[12].Yield != 0 || ts[12].Owner != "" {
-		t.Fatal("Enemy production leaked")
+	// Static terrain yields are always visible, while distant tile 18 hides ownership.
+	if !ts[12].Visible || ts[12].Owner != b.ID || ts[12].Yield == 0 {
+		t.Fatalf("1-hop adjacent sector should show owner & yield: %+v", ts[12])
+	}
+	if ts[18].Visible || ts[18].Owner != "" || ts[18].Neutral || ts[18].Yield == 0 {
+		t.Fatalf("2-hop sector must hide owner/neutral while keeping static yield: %+v", ts[18])
 	}
 	g.Phase = "simulate"
-	if len(g.view(a.ID)["units"].([]*Unit)) != 1 {
-		t.Fatal("Simulation not revealed")
+	simUs := g.view(a.ID)["units"].([]*Unit)
+	if len(simUs) != 1 || simUs[0].ID != "adj" {
+		t.Fatalf("Simulation should apply 1-hop LoS (expected only adj), got %d", len(simUs))
 	}
 }
 func TestMergeAndFeed(t *testing.T) {
@@ -364,14 +378,14 @@ func TestWeightedReinforceSectorCapAndPriorityAutoFeed(t *testing.T) {
 	if g.unit("tnk").Count != 10 || g.unit("tnk").Health != 60 {
 		t.Fatalf("Reinforce did not apply troop-weighted health: %+v", g.unit("tnk"))
 	}
-	// Sector cap of 6 separate stacks on recruit.
-	for i := 0; i < 4; i++ {
+	// Sector cap of 4 separate stacks on recruit (2 already present -> 2 more allowed, 5th rejected).
+	for i := 0; i < 2; i++ {
 		if err := g.command(p.ID, Command{Action: "recruit", Type: "infantry", Count: 1, Target: 0}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := g.command(p.ID, Command{Action: "recruit", Type: "infantry", Count: 1, Target: 0}); err == nil {
-		t.Fatal("Accepted 7th separate army stack in one sector")
+		t.Fatal("Accepted 5th separate army stack in one sector")
 	}
 	// Priority autoFeed: with 15 food for 10 Infantry + 10 Tanks (leaving only those two), Tanks get 1.0 and Infantry gets 0.5 (0 starvation).
 	g.Units = g.Units[:2]
