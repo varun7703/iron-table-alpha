@@ -79,7 +79,9 @@ func (g *Game) view(id string) map[string]any {
 	}
 	turn := ""
 	if g.Phase == "draft" {
-		turn = g.draftPlayer().ID
+		if dp := g.draftPlayer(); dp != nil {
+			turn = dp.ID
+		}
 	}
 	return map[string]any{"rollIndex": g.RollIndex, "timeline": timeline, "simulationDuration": max(12, len(g.Timeline)*3) * 1000, "code": g.Code, "host": g.Host, "phase": g.Phase, "round": g.Round, "deadline": g.Deadline, "players": ps, "territories": ts, "units": us, "orders": orders, "events": events, "turn": turn, "winner": g.Winner, "reserved": g.reserved(id, "")}
 }

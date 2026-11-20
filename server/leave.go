@@ -114,7 +114,7 @@ func (g *Game) leave(id string) error {
 					g.Draft++
 				}
 			}
-			if g.Draft == 4*len(g.Players) {
+			if g.Draft >= 4*len(g.Players) {
 				g.beginCapitals()
 			} else {
 				g.setPhase("draft", 25)
@@ -129,6 +129,7 @@ func (g *Game) leave(id string) error {
 		return nil
 	}
 	if g.Phase == "simulate" {
+		g.Orders = map[string]Order{}
 		g.Timeline = []BattleFrame{}
 		g.Events = []Event{}
 		g.recordFrame(name + " exited · armies dissolved and territories neutralized")
@@ -171,19 +172,29 @@ func (g *Game) hasHumans() bool {
 }
 
 func (g *Game) draftPlayer() *Player {
-	if len(g.Players) == 0 {
+	n := len(g.Players)
+	if n == 0 {
 		return nil
 	}
-	for offset := 0; offset < len(g.Players); offset++ {
-		p := g.Players[(g.Draft+offset)%len(g.Players)]
-		owned := 0
-		for _, t := range g.Territories {
+	owned := make([]int, n)
+	for _, t := range g.Territories {
+		for i, p := range g.Players {
 			if t.Owner == p.ID {
-				owned++
+				owned[i]++
+				break
 			}
 		}
-		if owned < 4 {
-			return p
+	}
+	for offset := 0; offset < 2*n; offset++ {
+		slot := g.Draft + offset
+		round := slot / n
+		pos := slot % n
+		idx := pos
+		if round%2 == 1 {
+			idx = n - 1 - pos
+		}
+		if owned[idx] < 4 {
+			return g.Players[idx]
 		}
 	}
 	return nil

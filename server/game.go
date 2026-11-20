@@ -192,7 +192,7 @@ func (g *Game) addPlayer(name string, bot bool) *Player {
 			break
 		}
 	}
-	p := &Player{Capital: -1, ID: uid(), Token: uid(), Name: name, Color: color, Bot: bot, Resources: Resources{40, 120, 40, 160}}
+	p := &Player{Capital: -1, ID: uid(), Token: uid(), Name: name, Color: color, Bot: bot, Resources: Resources{Humans: 16, Food: 40, Iron: 16, Currency: 60}}
 	g.Players = append(g.Players, p)
 	if g.Host == "" {
 		g.Host = p.ID
@@ -229,14 +229,29 @@ func rate(t string) int {
 	}
 	return 1
 }
+func unitHP(t string) float64 {
+	switch t {
+	case "tank":
+		return 20
+	case "artillery":
+		return 14
+	}
+	return 10
+}
 func cost(t string, n int) Resources {
 	switch t {
 	case "tank":
-		return Resources{n, 0, 8 * n, 4 * n}
+		return Resources{Humans: 3 * n, Iron: 8 * n, Currency: 8 * n}
 	case "artillery":
-		return Resources{n, 0, 4 * n, 2 * n}
+		return Resources{Humans: 2 * n, Iron: 4 * n, Currency: 4 * n}
 	}
-	return Resources{n, 0, 0, 4 * n}
+	return Resources{Humans: n, Currency: 4 * n}
+}
+func (g *Game) moveCost(u *Unit, target int) int {
+	if target >= 0 && target < len(g.Territories) && g.Territories[target].Owner == u.Owner {
+		return 0
+	}
+	return u.Count * rate(u.Type)
 }
 func spend(p *Player, c Resources) bool {
 	r := &p.Resources
@@ -253,7 +268,7 @@ func (g *Game) reserved(id, except string) int {
 	for key, o := range g.Orders {
 		u := g.unit(key)
 		if u != nil && u.Owner == id && key != except && o.Kind == "move" {
-			n += u.Count * rate(u.Type)
+			n += g.moveCost(u, o.Target)
 		}
 	}
 	return n
@@ -282,7 +297,8 @@ func (g *Game) command(id string, c Command) error {
 		return g.chooseCapital(id, c.Target)
 	}
 	if c.Action == "claim" {
-		if g.Phase != "draft" || g.draftPlayer().ID != id {
+		dp := g.draftPlayer()
+		if g.Phase != "draft" || dp == nil || dp.ID != id {
 			return bad("Wait for your draft turn")
 		}
 		if c.Target < 0 || c.Target >= len(g.Territories) || g.Territories[c.Target].Owner != "" {
@@ -333,10 +349,14 @@ func (g *Game) command(id string, c Command) error {
 		if c.Kind == "bombard" && u.Type != "artillery" {
 			return bad("Only artillery can bombard")
 		}
-		if c.Kind == "move" && g.reserved(id, u.ID)+u.Count*rate(u.Type) > p.Resources.Currency {
+		if c.Kind == "move" && g.reserved(id, u.ID)+g.moveCost(u, c.Target) > p.Resources.Currency {
 			return bad("Insufficient currency for movement")
 		}
-		g.Orders[u.ID] = Order{u.ID, c.Kind, c.Target}
+		target := c.Target
+		if c.Kind == "defend" {
+			target = u.Territory
+		}
+		g.Orders[u.ID] = Order{u.ID, c.Kind, target}
 		return nil
 	}
 	if g.Phase != "gather" {
@@ -386,8 +406,7 @@ func (g *Game) command(id string, c Command) error {
 		if a == nil || b == nil || a == b || a.Owner != id || b.Owner != id || a.Type != b.Type || a.Territory != b.Territory || a.Fed || b.Fed {
 			return bad("Merge two unfed armies of the same type in one territory")
 		}
-		a.Health = (a.Health*float64(a.Count) + b.Health*float64(b.Count)) / float64(a.Count+b.Count)
-		a.Count += b.Count
+		mergeUnits(a, b)
 		g.remove(b.ID)
 	case "reinforce":
 		u := g.unit(c.Unit)
@@ -404,6 +423,10 @@ func (g *Game) command(id string, c Command) error {
 	}
 	return nil
 }
+func mergeUnits(a, b *Unit) {
+	a.Health = (a.Health*float64(a.Count) + b.Health*float64(b.Count)) / float64(a.Count+b.Count)
+	a.Count += b.Count
+}
 func (g *Game) remove(id string) {
 	for i, u := range g.Units {
 		if u.ID == id {
@@ -416,7 +439,7 @@ func (g *Game) claim(t int, id string) {
 	g.Territories[t].Owner = id
 	g.Draft++
 	g.Deadline = time.Now().Add(25 * time.Second).UnixMilli()
-	if g.Draft == 4*len(g.Players) {
+	if g.Draft >= 4*len(g.Players) {
 		g.beginCapitals()
 	}
 }
@@ -426,17 +449,12 @@ func (g *Game) autoDraft() {
 	}
 }
 func (g *Game) draftOne() {
-	if g.draftPlayer() == nil {
+	p := g.draftPlayer()
+	if p == nil {
 		return
 	}
-	free := []int{}
-	for _, t := range g.Territories {
-		if t.Owner == "" {
-			free = append(free, t.ID)
-		}
-	}
-	if len(free) > 0 {
-		g.claim(free[rng.IntN(len(free))], g.draftPlayer().ID)
+	if pick := g.pickDraftTerritory(p); pick >= 0 {
+		g.claim(pick, p.ID)
 	}
 }
 func (g *Game) allReady() bool {
@@ -519,6 +537,7 @@ func (g *Game) advance() {
 			return
 		}
 		g.setPhase("gather", 0)
+		g.Orders = map[string]Order{}
 		for _, t := range g.Territories {
 			p := g.player(t.Owner)
 			if p == nil {
@@ -535,9 +554,16 @@ func (g *Game) advance() {
 		for _, u := range g.Units {
 			u.Fed = false
 		}
+		// Snapshot pre-Gather unit visibility so bots in the same Gather tick cannot react to each other's new recruits.
+		snapshot := make([]Unit, 0, len(g.Units))
+		for _, u := range g.Units {
+			if u.Count > 0 {
+				snapshot = append(snapshot, *u)
+			}
+		}
 		for _, p := range g.Players {
 			if p.Bot {
-				g.autoFeed(p)
+				g.botGatherWithSnapshot(p, snapshot)
 			}
 		}
 	case "gather":
@@ -569,6 +595,7 @@ func (g *Game) singleOwner() bool {
 func (g *Game) finish() {
 	g.Phase = "finished"
 	g.Deadline = 0
+	g.Orders = map[string]Order{}
 	best := -1
 	winners := []string{}
 	for _, p := range g.Players {
@@ -603,38 +630,25 @@ func (g *Game) tick() {
 		}
 	}
 }
-func (g *Game) botOrders() {
-	for _, u := range g.Units {
-		p := g.player(u.Owner)
-		if !p.Bot {
-			continue
-		}
-		for _, n := range g.Territories[u.Territory].Neighbors {
-			if g.Territories[n].Owner != u.Owner {
-				kind := "move"
-				if u.Type == "artillery" {
-					kind = "bombard"
-				}
-				_ = g.commandBot(u, kind, n)
-				break
-			}
-		}
+func isDefending(orders map[string]Order, u *Unit) bool {
+	if orders == nil || u == nil {
+		return false
 	}
+	o, ok := orders[u.ID]
+	return ok && o.Kind == "defend"
 }
-func (g *Game) commandBot(u *Unit, kind string, n int) error {
-	p := g.player(u.Owner)
-	if kind == "move" && g.reserved(p.ID, "")+u.Count*rate(u.Type) > p.Resources.Currency {
-		return nil
+func defendBonus(orders map[string]Order, u *Unit, direct bool) float64 {
+	if direct && isDefending(orders, u) {
+		return 1.2
 	}
-	g.Orders[u.ID] = Order{u.ID, kind, n}
-	return nil
+	return 1.0
 }
 func attack(u *Unit, other string, direct bool) float64 {
 	base := 2.0
 	mod := 1.0
 	switch u.Type {
 	case "tank":
-		base = 7
+		base = 6
 		if other == "infantry" {
 			mod = 1.4
 		}
@@ -642,10 +656,10 @@ func attack(u *Unit, other string, direct bool) float64 {
 		base = 4
 		if direct {
 			base = 1
-		} else if other == "infantry" {
-			mod = 1.5
 		} else if other == "tank" {
-			mod = .7
+			mod = 1.5
+		} else if other == "infantry" {
+			mod = 1.2
 		}
 	}
 	if other == "artillery" && u.Type != "artillery" {
@@ -665,10 +679,15 @@ func attack(u *Unit, other string, direct bool) float64 {
 // troop losses across same-sector, same-owner, same-type stacks so splitting
 // armies into smaller stacks neither reduces nor amplifies casualties.
 func applyDamage(units []*Unit, damage map[string]float64) {
+	applyDamageBucketed(units, damage, nil)
+}
+
+func applyDamageBucketed(units []*Unit, damage map[string]float64, bucket func(*Unit) int) {
 	type groupKey struct {
 		territory int
 		owner     string
 		kind      string
+		bucket    int
 	}
 	type entry struct {
 		u        *Unit
@@ -684,33 +703,41 @@ func applyDamage(units []*Unit, damage map[string]float64) {
 		if d <= 0 || u.Count <= 0 {
 			continue
 		}
-		k := groupKey{u.Territory, u.Owner, u.Type}
+		b := 0
+		if bucket != nil {
+			b = bucket(u)
+		}
+		k := groupKey{u.Territory, u.Owner, u.Type, b}
 		if _, exists := groups[k]; !exists {
 			order = append(order, k)
 		}
-		baseLoss := int(math.Floor(d / 10))
+		hp := unitHP(u.Type)
+		baseLoss := int(math.Floor(d / hp))
 		groups[k] = append(groups[k], entry{
 			u:        u,
 			before:   u.Count,
 			baseLoss: baseLoss,
 			dmg:      d,
-			rem:      d - float64(baseLoss*10),
+			rem:      d - float64(baseLoss)*hp,
 		})
 	}
 	for _, k := range order {
 		items := groups[k]
+		hp := unitHP(k.kind)
 		totalDmg := 0.0
 		sumKilled := 0
 		for _, it := range items {
-			totalDmg += it.dmg
+			// Cap pooled damage per stack at its lethal capacity so overkill on a wiped
+			// stack cannot bleed into other surviving stacks in the same group.
+			totalDmg += math.Min(it.dmg, float64(it.before)*hp)
 			it.u.Count = max(0, it.before-it.baseLoss)
-			it.u.Health = math.Max(0, it.u.Health-it.dmg/float64(max(1, it.before))*6)
+			it.u.Health = math.Max(0, it.u.Health-(it.dmg/(float64(max(1, it.before))*hp))*60)
 			if it.u.Health <= 0 {
 				it.u.Count = 0
 			}
 			sumKilled += it.before - it.u.Count
 		}
-		extra := int(math.Floor((totalDmg+1e-9)/10)) - sumKilled
+		extra := int(math.Floor((totalDmg+1e-9)/hp)) - sumKilled
 		if extra > 0 {
 			idx := make([]int, len(items))
 			for i := range idx {
@@ -745,20 +772,28 @@ func applyDamage(units []*Unit, damage map[string]float64) {
 
 // distributeDamage spreads attacker a's damage across hostile living targets in
 // territory (or across all hostile living targets when territory < 0), weighted
-// by each target stack's troop count. Returns true if any hostile troops were hit.
-func distributeDamage(a *Unit, targets []*Unit, territory int, direct bool, out map[string]float64) bool {
-	oppTroops := 0
+// by each target stack's effective HP (count * unitHP * health/100). Entrenched
+// units gain +20% direct combat power and take 25% less bombardment damage.
+// Returns true if any hostile troops were hit.
+func distributeDamage(a *Unit, targets []*Unit, territory int, direct bool, orders map[string]Order, out map[string]float64) bool {
+	oppWeight := 0.0
 	for _, b := range targets {
-		if b.Owner != a.Owner && b.Count > 0 && (territory < 0 || b.Territory == territory) {
-			oppTroops += b.Count
+		if b.Owner != a.Owner && b.Count > 0 && b.Health > 0 && (territory < 0 || b.Territory == territory) {
+			oppWeight += float64(b.Count) * unitHP(b.Type) * (b.Health / 100)
 		}
 	}
-	if oppTroops <= 0 {
+	if oppWeight <= 0 {
 		return false
 	}
+	atkMult := defendBonus(orders, a, direct)
 	for _, b := range targets {
-		if b.Owner != a.Owner && b.Count > 0 && (territory < 0 || b.Territory == territory) {
-			out[b.ID] += attack(a, b.Type, direct) * float64(b.Count) / float64(oppTroops)
+		if b.Owner != a.Owner && b.Count > 0 && b.Health > 0 && (territory < 0 || b.Territory == territory) {
+			share := float64(b.Count) * unitHP(b.Type) * (b.Health / 100) / oppWeight
+			defMult := 1.0
+			if !direct && isDefending(orders, b) {
+				defMult = 0.75
+			}
+			out[b.ID] += attack(a, b.Type, direct) * atkMult * share * defMult
 		}
 	}
 	return true
@@ -769,26 +804,16 @@ func (g *Game) resolve() {
 	g.Timeline = []BattleFrame{}
 	g.recordFrame("Orders revealed · armies before combat")
 	orig := map[string]int{}
-	damage := map[string]float64{}
 	for _, u := range g.Units {
 		orig[u.ID] = u.Territory
 		if o, ok := g.Orders[u.ID]; ok && o.Kind == "move" {
-			g.player(u.Owner).Resources.Currency -= u.Count * rate(u.Type)
+			if p := g.player(u.Owner); p != nil {
+				p.Resources.Currency -= g.moveCost(u, o.Target)
+			}
 		}
 	}
-	for _, u := range g.Units {
-		o, ok := g.Orders[u.ID]
-		if !ok || o.Kind != "bombard" || u.Count <= 0 {
-			continue
-		}
-		g.Events = append(g.Events, Event{fmt.Sprintf("Artillery bombards %s", g.Territories[o.Target].Name), u.Territory, o.Target, "bombard"})
-		distributeDamage(u, g.Units, o.Target, false, damage)
-	}
-	applyDamage(g.Units, damage)
-	g.recordFrame("Bombardment resolved · simultaneous artillery damage")
-	// Resolve opposing border crossings at their origins; surviving forces hold.
+	// Stage 1: Resolve opposing border crossings per edge so unrelated borders never pool damage.
 	blocked := map[string]bool{}
-	damage = map[string]float64{}
 	type edge struct{ from, to int }
 	crossing := map[edge][]*Unit{}
 	edgePairs := [][2]int{}
@@ -811,24 +836,29 @@ func (g *Game) resolve() {
 		if len(sideX) == 0 || len(sideY) == 0 {
 			continue
 		}
+		edgeDamage := map[string]float64{}
 		clashed := false
 		for _, a := range sideX {
-			if distributeDamage(a, sideY, -1, true, damage) {
+			if distributeDamage(a, sideY, -1, true, g.Orders, edgeDamage) {
 				blocked[a.ID] = true
 				clashed = true
 			}
 		}
 		for _, b := range sideY {
-			if distributeDamage(b, sideX, -1, true, damage) {
+			if distributeDamage(b, sideX, -1, true, g.Orders, edgeDamage) {
 				blocked[b.ID] = true
 			}
 		}
 		if clashed {
+			edgeUnits := make([]*Unit, 0, len(sideX)+len(sideY))
+			edgeUnits = append(edgeUnits, sideX...)
+			edgeUnits = append(edgeUnits, sideY...)
+			applyDamage(edgeUnits, edgeDamage)
 			g.Events = append(g.Events, Event{"Opposing armies clash at the border", x, y, "battle"})
 		}
 	}
-	applyDamage(g.Units, damage)
 	g.recordFrame("Border clashes resolved · simultaneous return fire")
+	// Stage 2: Advance unblocked movers to their destination sectors.
 	for _, u := range g.Units {
 		o, ok := g.Orders[u.ID]
 		if ok && o.Kind == "move" {
@@ -839,6 +869,33 @@ func (g *Game) resolve() {
 		}
 	}
 	g.recordFrame("Movement resolved · armies reach their destinations")
+	// Stage 3: Bombardment resolves after movement so backline artillery shells incoming attackers.
+	// Artillery overrun by hostile troops in its own sector during Stage 2 is locked in melee and suppressed.
+	overrun := func(u *Unit) bool {
+		for _, v := range g.Units {
+			if v.Territory == u.Territory && v.Owner != u.Owner && v.Count > 0 {
+				return true
+			}
+		}
+		return false
+	}
+	damage := map[string]float64{}
+	for _, u := range g.Units {
+		o, ok := g.Orders[u.ID]
+		if !ok || o.Kind != "bombard" || u.Count <= 0 || overrun(u) {
+			continue
+		}
+		g.Events = append(g.Events, Event{fmt.Sprintf("Artillery bombards %s", g.Territories[o.Target].Name), u.Territory, o.Target, "bombard"})
+		distributeDamage(u, g.Units, o.Target, false, g.Orders, damage)
+	}
+	applyDamageBucketed(g.Units, damage, func(u *Unit) int {
+		if isDefending(g.Orders, u) {
+			return 1
+		}
+		return 0
+	})
+	g.recordFrame("Bombardment resolved · simultaneous artillery damage")
+	// Stage 4: Destination battles and territory ownership.
 	stationed := map[int][]*Unit{}
 	retreats := map[string]bool{}
 	for _, u := range g.Units {
@@ -859,7 +916,7 @@ func (g *Game) resolve() {
 				if a.Count <= 0 || a.Territory != t.ID {
 					continue
 				}
-				distributeDamage(a, stationed[t.ID], t.ID, true, losses)
+				distributeDamage(a, stationed[t.ID], t.ID, true, g.Orders, losses)
 			}
 			applyDamage(stationed[t.ID], losses)
 			g.Events = append(g.Events, Event{"Battle at " + t.Name, t.ID, t.ID, "battle"})
@@ -877,7 +934,7 @@ func (g *Game) resolve() {
 			strength := 0.0
 			for _, u := range groups[owner] {
 				if u.Count > 0 {
-					strength += attack(u, "", true)
+					strength += attack(u, "", true) * defendBonus(g.Orders, u, true)
 				}
 			}
 			strengths[owner] = strength
@@ -898,8 +955,14 @@ func (g *Game) resolve() {
 				best = ""
 			}
 		}
+		// When a multi-way tie leaves territory ownership unchanged, the incumbent
+		// garrison retains its sector while all tied attackers retreat.
+		holder := best
+		if holder == "" {
+			holder = t.Owner
+		}
 		for owner, units := range groups {
-			if owner == best {
+			if owner == holder {
 				continue
 			}
 			for _, u := range units {

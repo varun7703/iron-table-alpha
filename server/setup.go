@@ -34,11 +34,8 @@ func (g *Game) beginCapitals() {
 	g.setPhase("capital", 0)
 	for _, p := range g.Players {
 		if p.Bot {
-			for _, t := range g.Territories {
-				if t.Owner == p.ID {
-					p.Capital = t.ID
-					break
-				}
+			if capID := g.pickBotCapital(p); capID >= 0 {
+				p.Capital = capID
 			}
 		}
 	}

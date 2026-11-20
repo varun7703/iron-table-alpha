@@ -10,11 +10,17 @@ class Commander {
 const a=new Commander(),b=new Commander();let reconnect;
 try{
  await Promise.all([a.connect(),b.connect()]);await a.command('create',{name:'Network Alpha'});await b.command('join',{name:'Network Bravo',code:a.session.code});await a.wait(()=>a.game.players.length===2);assert.equal(b.game.players.length,2);
- await a.command('start');await b.wait(()=>b.game.phase==='draft',15000);
- for(let i=0;i<8;i++){const current=a.game.turn===a.session.player?a:b;await current.wait(()=>current.game.phase==='draft');const t=current.game.territories.find(t=>!t.owner);await current.command('claim',{target:t.id});await Promise.all([a.wait(()=>a.game.phase!=='draft'||a.game.turn!==current.session.player),b.wait(()=>b.game.phase!=='draft'||b.game.turn!==current.session.player)])}
+ await a.command('start');await Promise.all([a.wait(()=>a.game.phase==='draft',15000),b.wait(()=>b.game.phase==='draft',15000)]);
+ const picks=[];
+ for(let i=0;i<8;i++){const current=a.game.turn===a.session.player?a:b;picks.push(current.session.player);await current.wait(()=>current.game.phase==='draft');const t=current.game.territories.find(t=>!t.owner);await current.command('claim',{target:t.id});await Promise.all([a.wait(()=>a.game.territories[t.id].owner===current.session.player),b.wait(()=>b.game.territories[t.id].owner===current.session.player)])}
+ const first=picks[0],second=picks[1];assert.notEqual(first,second);assert.deepEqual(picks,[first,second,second,first,first,second,second,first]);
  await Promise.all([a.wait(()=>a.game.phase==='capital'),b.wait(()=>b.game.phase==='capital')]);for(const p of [a,b]){const tile=p.game.territories.find(t=>t.owner===p.session.player);await p.command('capital',{target:tile.id})}
  await Promise.all([a.wait(()=>a.game.phase==='plan'),b.wait(()=>b.game.phase==='plan')]);assert(a.game.units.every(u=>u.owner===a.session.player));assert(b.game.units.every(u=>u.owner===b.session.player));assert.equal(a.game.units.length,4);
- const u=a.game.units[0],target=a.game.territories[u.territory].neighbors[0],before=a.game.players.find(p=>p.id===a.session.player).resources.currency;
+ const u=a.game.units.find(v=>a.game.territories[v.territory].neighbors.some(n=>a.game.territories[n].owner!==a.session.player));assert(u);
+ const target=a.game.territories[u.territory].neighbors.find(n=>a.game.territories[n].owner!==a.session.player);
+ const friendly=a.game.units.find(v=>v.id!==u.id&&a.game.territories[v.territory].neighbors.some(n=>a.game.territories[n].owner===a.session.player));
+ if(friendly){const fTarget=a.game.territories[friendly.territory].neighbors.find(n=>a.game.territories[n].owner===a.session.player);await a.command('order',{unit:friendly.id,kind:'move',target:fTarget});assert.equal(a.game.reserved,0)}
+ const before=a.game.players.find(p=>p.id===a.session.player).resources.currency;
  await a.command('order',{unit:u.id,kind:'move',target});assert.equal(a.game.reserved,4);assert.equal(Object.keys(b.game.orders).length,0);
  await assert.rejects(()=>b.command('order',{unit:u.id,kind:'move',target}),/own army/);
  await a.command('ready');await b.command('ready');await a.wait(()=>a.game.phase==='simulate');assert(a.game.units.some(u=>u.owner===b.session.player));assert.equal(a.game.players.find(p=>p.id===a.session.player).resources.currency,before-4);assert(a.game.timeline.length>=5);assert.equal(a.game.timeline[0].units.find(v=>v.id===u.id).territory,u.territory);assert.deepEqual(a.game.timeline.at(-1).units,a.game.units);assert(a.game.simulationDuration>=a.game.timeline.length*3000);

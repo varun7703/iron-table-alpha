@@ -45,13 +45,22 @@ func TestMovementBudgetAndLock(t *testing.T) {
 	g := fixture()
 	p := g.Players[0]
 	p.Resources.Currency = 10
-	u := &Unit{ID: "a", Owner: p.ID, Type: "tank", Territory: 0, Count: 4, Health: 100, Ration: 1}
-	g.Units = []*Unit{u}
-	if g.command(p.ID, Command{Action: "order", Unit: u.ID, Kind: "move", Target: 1}) == nil {
+	// Friendly-sector movement is free (0 currency).
+	friendly := &Unit{ID: "f", Owner: p.ID, Type: "tank", Territory: 0, Count: 4, Health: 100, Ration: 1}
+	// Hostile-sector movement (6 -> 12) costs 4 * 3 = 12 currency.
+	u := &Unit{ID: "a", Owner: p.ID, Type: "tank", Territory: 6, Count: 4, Health: 100, Ration: 1}
+	g.Units = []*Unit{friendly, u}
+	if err := g.command(p.ID, Command{Action: "order", Unit: friendly.ID, Kind: "move", Target: 1}); err != nil {
+		t.Fatalf("Free friendly movement rejected: %v", err)
+	}
+	if g.reserved(p.ID, "") != 0 {
+		t.Fatalf("Friendly movement reserved currency: %d", g.reserved(p.ID, ""))
+	}
+	if g.command(p.ID, Command{Action: "order", Unit: u.ID, Kind: "move", Target: 12}) == nil {
 		t.Fatal("Overspending accepted")
 	}
 	p.Resources.Currency = 20
-	if err := g.command(p.ID, Command{Action: "order", Unit: u.ID, Kind: "move", Target: 1}); err != nil {
+	if err := g.command(p.ID, Command{Action: "order", Unit: u.ID, Kind: "move", Target: 12}); err != nil {
 		t.Fatal(err)
 	}
 	p.Ready = true
@@ -59,8 +68,8 @@ func TestMovementBudgetAndLock(t *testing.T) {
 		t.Fatal("Locked orders changed")
 	}
 	g.resolve()
-	if p.Resources.Currency != 8 || u.Territory != 1 {
-		t.Fatal("Movement charge or destination incorrect")
+	if p.Resources.Currency != 8 || friendly.Territory != 1 || u.Territory != 12 {
+		t.Fatalf("Movement charge or destination incorrect: currency=%d friendly=%d hostile=%d", p.Resources.Currency, friendly.Territory, u.Territory)
 	}
 }
 func TestFogDoesNotLeak(t *testing.T) {
@@ -116,8 +125,10 @@ func TestArtilleryRangedAndRecruitment(t *testing.T) {
 	}
 	g.Phase = "gather"
 	before := a.Resources
-	g.command(a.ID, Command{Action: "recruit", Type: "tank", Count: 2, Target: 0})
-	if a.Resources.Humans != before.Humans-2 || a.Resources.Iron != before.Iron-16 || a.Resources.Currency != before.Currency-8 {
+	if err := g.command(a.ID, Command{Action: "recruit", Type: "tank", Count: 2, Target: 0}); err != nil {
+		t.Fatal(err)
+	}
+	if a.Resources.Humans != before.Humans-6 || a.Resources.Iron != before.Iron-16 || a.Resources.Currency != before.Currency-16 {
 		t.Fatal("Incorrect tank cost")
 	}
 }

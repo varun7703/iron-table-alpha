@@ -17,11 +17,14 @@ func TestBombardmentAndBorderReplay(t *testing.T) {
 	if len(g.Timeline) < 5 {
 		t.Fatal("Missing resolution stages")
 	}
+	// Order of stages: 0 Orders revealed, 1 Border clashes, 2 Movement, 3 Bombardment, 4 Retreats/final.
+	// Border clash: a (5 tanks) takes 3*6=18 dmg (0 kills @ 20 HP, Health 100 - 18/100*60 = 89.20); both blocked.
+	// Bombardment: art (4 artillery @ x1.5 vs tank = 24 dmg) hits a -> 1 kill @ 20 HP, Health 89.20 - 24/100*60 = 74.80.
 	checks := []struct {
 		frame  int
 		count  int
 		health float64
-	}{{0, 5, 100}, {1, 4, 86.56}, {2, 2, 55.06}}
+	}{{0, 5, 100}, {1, 5, 89.2}, {2, 5, 89.2}, {3, 4, 74.8}}
 	for _, c := range checks {
 		u := g.Timeline[c.frame].Units[0]
 		if u.Count != c.count || math.Abs(u.Health-c.health) > .0001 {
@@ -37,8 +40,8 @@ func TestBombardmentAndBorderReplay(t *testing.T) {
 			t.Fatal("Final unit mismatch")
 		}
 	}
-	if math.Abs(attack(g.unit("a"), "tank", true)-7.7084) > .0001 {
-		t.Fatal("Strength does not reflect damage")
+	if math.Abs(attack(g.unit("a"), "tank", true)-17.952) > .0001 {
+		t.Fatalf("Strength does not reflect damage: got %.4f", attack(g.unit("a"), "tank", true))
 	}
 	g.unit("a").Health = 1
 	if g.Timeline[0].Units[0].Health != 100 {
