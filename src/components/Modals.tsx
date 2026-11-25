@@ -57,7 +57,7 @@ export function ManualModal({ onClose }: { onClose: () => void }) {
         <span className="eyebrow">COMMANDER’S HANDBOOK</span>
         <h2 id="manual-title">One map. Three phases.</h2>
         <p>
-          Draft territories in snake dice order (A → B → C → D → D → C → B → A). Every territory yields manpower and
+          Draft territories in repeating dice order (A → B → C → D → A → B → C → D). Every territory yields manpower and
           currency, plus food or iron. Static terrain yields are always visible across the map.
         </p>
         <p>
@@ -74,8 +74,7 @@ export function ManualModal({ onClose }: { onClose: () => void }) {
           <b>Plan (90s):</b> one order per army. Friendly-sector transfers are free; attacking or claiming neutral
           sectors costs 1 / 2 / 3 currency per infantry / artillery / tank. Artillery defaults to Bombard across one
           border after movement (×1.5 vs tanks, ×1.2 vs infantry), unless overrun in melee. Hold &amp; defend entrenches
-          an army (+20% direct combat, −25% bombardment taken). You may also split an army (up to{' '}
-          {MAX_STACKS_PER_SECTOR} stacks per sector).
+          an army (+20% direct combat, −25% bombardment taken). Splitting is available only during Gather.
         </p>
         <p>
           <b>Simulate:</b> border clashes resolve first, then movement, then artillery bombardment, then destination
@@ -83,7 +82,7 @@ export function ManualModal({ onClose }: { onClose: () => void }) {
           scrubber to pause or step through frames, and check the Last Round tab during Gather or Plan.
         </p>
         <p>
-          <b>Gather (120s):</b> income arrives automatically. Infantry costs 1 human + 4 currency; artillery 2 humans + 4
+          <b>Gather (no timer):</b> income arrives automatically. Infantry costs 1 human + 4 currency; artillery 2 humans + 4
           currency + 4 iron; tanks 3 humans + 8 currency + 8 iron. Merge, reinforce, or split unfed armies (max{' '}
           {MAX_STACKS_PER_SECTOR} stacks per sector).
         </p>

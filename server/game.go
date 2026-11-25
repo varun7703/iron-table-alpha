@@ -101,7 +101,7 @@ type Command struct {
 }
 
 const (
-	maxStacksPerSector      = 4
+	maxStacksPerSector      = 6
 	capitalCurrencyBonus    = 4
 	capitalHumansBonus      = 2
 	capitalDefenseBonus     = 1.15
@@ -343,8 +343,8 @@ func (g *Game) command(id string, c Command) error {
 		return bad("Orders are locked until the next phase")
 	}
 	if c.Action == "split" {
-		if g.Phase != "gather" && g.Phase != "plan" {
-			return bad("Split belongs in Plan or Gather")
+		if g.Phase != "gather" {
+			return bad("Split belongs in Gather")
 		}
 		u := g.unit(c.Unit)
 		if u == nil || u.Owner != id {
@@ -358,9 +358,6 @@ func (g *Game) command(id string, c Command) error {
 		}
 		if g.sectorStackCount(u.Territory) >= maxStacksPerSector {
 			return bad(fmt.Sprintf("Sector limit reached (%d armies); merge or reinforce existing armies", maxStacksPerSector))
-		}
-		if g.Phase == "plan" {
-			delete(g.Orders, u.ID)
 		}
 		u.Count -= c.Count
 		g.Units = append(g.Units, &Unit{uid(), id, u.Type, u.Territory, c.Count, u.Health, u.Ration, u.Fed})
@@ -581,7 +578,7 @@ func (g *Game) advance() {
 			g.finish()
 			return
 		}
-		g.setPhase("gather", 120)
+		g.setPhase("gather", 0)
 		g.Orders = map[string]Order{}
 		for _, t := range g.Territories {
 			p := g.player(t.Owner)

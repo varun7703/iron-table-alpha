@@ -107,10 +107,10 @@ export function RightPanel({
     unit!.owner === player &&
     unit!.count >= 2 &&
     sectorStacks < MAX_STACKS_PER_SECTOR &&
-    (phase === 'plan' || (phase === 'gather' && !unit!.fed));
+    phase === 'gather' && !unit!.fed;
 
   const renderSplitControls = () => {
-    if (!unit || unit.owner !== player || unit.count < 2) return null;
+    if (phase !== 'gather' || !unit || unit.owner !== player || unit.count < 2) return null;
     if (phase === 'gather' && unit.fed) return null;
     const capped = sectorStacks >= MAX_STACKS_PER_SECTOR;
     const clampedSplit = Math.max(1, Math.min(unit.count - 1, splitCount));
@@ -125,9 +125,7 @@ export function RightPanel({
         </div>
         {capped ? (
           <p className="muted">
-            {phase === 'plan'
-              ? `Sector at ${MAX_STACKS_PER_SECTOR}-army limit. Move a stack out next Simulate or merge in Gather.`
-              : `Sector at ${MAX_STACKS_PER_SECTOR}-army limit. Merge existing stacks first.`}
+            {`Sector at ${MAX_STACKS_PER_SECTOR}-army limit. Merge existing stacks first.`}
           </p>
         ) : (
           <>
@@ -157,9 +155,6 @@ export function RightPanel({
             >
               Split detachment ({kept} keep / {clampedSplit} detach)
             </button>
-            {phase === 'plan' && game.orders[unit.id] && (
-              <p className="muted">Splitting clears this army’s current order so both halves can be tasked.</p>
-            )}
           </>
         )}
       </div>
@@ -445,7 +440,6 @@ export function RightPanel({
                   Cancel current order
                 </button>
               )}
-              {renderSplitControls()}
             </div>
           )}
 

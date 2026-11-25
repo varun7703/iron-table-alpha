@@ -10,13 +10,13 @@ const PHASE_INFO: Record<string, [string, string]> = {
     'Select one of your four territories (45s). Rival picks stay concealed until Round 1.',
   ],
   lobby: ['Assemble your commanders', 'Create a private room. Divide the continent. Write your own campaign.'],
-  draft: ['Divide the continent', 'Snake dice order. Claim one territory on your turn, up to four each.'],
+  draft: ['Divide the continent', 'Repeating dice order. Claim one territory on your turn, up to four each.'],
   plan: ['Make your next move', 'Select an army, then an adjacent territory. Artillery defaults to Bombard.'],
   simulate: [
     'The battlefield is revealed',
     'Orders resolve together within 1-hop Line of Sight. Pause or scrub any step.',
   ],
-  gather: ['Rebuild. Replenish. Prepare.', 'Income collected (120s). Recruit, split, merge, and allocate rations.'],
+  gather: ['Rebuild. Replenish. Prepare.', 'Income collected. Lock in when ready. Recruit, split, merge, and allocate rations.'],
   finished: ['The campaign has ended', 'Victory Points (Territories + 2 × Capitals) decide the victor.'],
 };
 

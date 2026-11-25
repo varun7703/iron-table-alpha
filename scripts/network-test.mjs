@@ -62,7 +62,7 @@ try {
   await a.wait(() => a.game.players.length === 2);
   assert.equal(b.game.players.length, 2);
 
-  // Initiative roll + Snake Draft (8 picks)
+  // Initiative roll + Repeating Draft (8 picks)
   await a.command('start');
   await Promise.all([a.wait(() => a.game.phase === 'draft', 15000), b.wait(() => b.game.phase === 'draft', 15000)]);
   const picks = [];
@@ -82,7 +82,7 @@ try {
   const first = picks[0];
   const second = picks[1];
   assert.notEqual(first, second);
-  assert.deepEqual(picks, [first, second, second, first, first, second, second, first]);
+  assert.deepEqual(picks, [first, second, first, second, first, second, first, second]);
 
   // Capital selection: 45s timer & concealed rival pick
   await Promise.all([a.wait(() => a.game.phase === 'capital'), b.wait(() => b.game.phase === 'capital')]);
@@ -105,12 +105,12 @@ try {
   assert(a.game.units.every(u => u.owner === a.session.player || a.game.territories[u.territory].visible));
   assert.equal(a.game.units.filter(u => u.owner === a.session.player).length, 4);
 
-  // Army Split during Plan
+  // Army Split is rejected during Plan
   const splitTarget = a.game.units.find(v => v.owner === a.session.player && v.count === 4);
   assert(splitTarget);
-  await a.command('split', { unit: splitTarget.id, count: 2 });
-  assert.equal(a.game.units.filter(u => u.owner === a.session.player).length, 5);
-  assert.equal(a.game.units.find(u => u.id === splitTarget.id).count, 2);
+  await assert.rejects(() => a.command('split', { unit: splitTarget.id, count: 2 }), /Gather/);
+  assert.equal(a.game.units.filter(u => u.owner === a.session.player).length, 4);
+  assert.equal(a.game.units.find(u => u.id === splitTarget.id).count, 4);
 
   // Free friendly move + paid neutral/hostile move + private orders
   const u = a.game.units.find(
@@ -155,13 +155,13 @@ try {
     'Simulate leaked unit outside 1-hop LoS',
   );
 
-  // Gather phase: 120s AFK deadline, Capital HQ income (+4 currency, +2 humans), lastEvents, recruit, feed, dedup
+  // Gather phase: untimed lock-in, Capital HQ income (+4 currency, +2 humans), lastEvents, recruit, feed, dedup
   const preGatherCurrency = a.game.players.find(p => p.id === a.session.player).resources.currency;
   const ownedBeforeGather = a.game.territories.filter(t => t.owner === a.session.player).length;
   await a.command('ready');
   await b.command('ready');
   await Promise.all([a.wait(() => a.game.phase === 'gather'), b.wait(() => b.game.phase === 'gather')]);
-  assert(a.game.deadline > Date.now(), 'Gather phase must have an AFK deadline');
+  assert.equal(a.game.deadline, 0, 'Gather phase must have no deadline');
   assert.equal(a.game.simulationDuration, 0, 'simulationDuration must reset to 0 after simulate');
   const postGatherCurrency = a.game.players.find(p => p.id === a.session.player).resources.currency;
   assert.equal(
@@ -170,6 +170,9 @@ try {
     'Gather income must include +4 Capital HQ currency bonus',
   );
   assert(Array.isArray(a.game.lastEvents) && a.game.lastEvents.length > 0, 'Last round report missing in Gather');
+
+  const gatherSplit = a.game.units.find(v => v.owner === a.session.player && v.count >= 2);
+  await a.command('split', { unit: gatherSplit.id, count: 1 });
 
   const territory = a.game.territories.find(
     t => t.owner === a.session.player && a.game.units.filter(v => v.territory === t.id).length < 3,
@@ -191,13 +194,13 @@ try {
   a.ws.send(body);
   await new Promise(r => setTimeout(r, 150));
   assert.equal(a.game.units.length, count + 1);
-  // Fill sector to 4 stacks and verify 5th stack is rejected by 4-stack cap
-  while (a.game.units.filter(x => x.territory === territory.id).length < 4) {
+  // Fill sector to 6 stacks and verify 7th stack is rejected by 6-stack cap
+  while (a.game.units.filter(x => x.territory === territory.id).length < 6) {
     await a.command('recruit', { type: 'infantry', count: 1, target: territory.id });
   }
   await assert.rejects(
     () => a.command('recruit', { type: 'infantry', count: 1, target: territory.id }),
-    /Sector limit reached \(4 armies\)/,
+    /Sector limit reached \(6 armies\)/,
   );
 
   // 5-minute disconnect grace + reconnect
@@ -237,7 +240,7 @@ try {
   await reconnect.wait(() => reconnect.messages.some(m => m.type === 'left'));
 
   console.log(
-    'PASS: two-player lobby, snake draft, concealed timed capitals, 1-hop LoS across Plan/Simulate/Gather, Army Split, Capital HQ income, Last Round report, timed Gather, deduplication, 5m reconnect grace, and surrender.',
+    'PASS: two-player lobby, repeating draft, concealed timed capitals, 1-hop LoS across Plan/Simulate/Gather, Army Split, Capital HQ income, Last Round report, untimed Gather, deduplication, 5m reconnect grace, and surrender.',
   );
 } finally {
   a.close();

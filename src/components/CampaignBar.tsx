@@ -32,7 +32,7 @@ export function CampaignBar({
       : phase === 'roll'
         ? 'ROLLING INITIATIVE'
         : phase === 'gather'
-          ? 'GATHER TIMER'
+          ? 'AWAITING LOCK-IN'
           : phase === 'finished'
             ? 'CAMPAIGN COMPLETE'
             : phase === 'lobby'
@@ -42,7 +42,7 @@ export function CampaignBar({
                 : 'PHASE ENDS IN';
 
   const countdownValue =
-    phase === 'lobby' || phase === 'finished'
+    phase === 'lobby' || phase === 'finished' || phase === 'gather'
       ? '—'
       : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 

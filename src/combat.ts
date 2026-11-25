@@ -1,6 +1,6 @@
 import type { Game, ResourceKey, Resources, Territory, Unit } from './types.ts';
 
-export const MAX_STACKS_PER_SECTOR = 4;
+export const MAX_STACKS_PER_SECTOR = 6;
 export const CAPITAL_CURRENCY_BONUS = 4;
 export const CAPITAL_HUMANS_BONUS = 2;
 export const CAPITAL_DEFENSE_BONUS = 1.15;

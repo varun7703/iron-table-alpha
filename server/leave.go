@@ -198,14 +198,9 @@ func (g *Game) draftPlayer() *Player {
 			}
 		}
 	}
-	for offset := 0; offset < 2*n; offset++ {
+	for offset := 0; offset < n; offset++ {
 		slot := g.Draft + offset
-		round := slot / n
-		pos := slot % n
-		idx := pos
-		if round%2 == 1 {
-			idx = n - 1 - pos
-		}
+		idx := slot % n
 		if owned[idx] < 4 {
 			return g.Players[idx]
 		}

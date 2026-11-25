@@ -182,14 +182,14 @@ func TestDefendEntrenchmentAndBombardResistance(t *testing.T) {
 	}
 }
 
-func TestSnakeDraftOrderAndMidDraftSurrender(t *testing.T) {
+func TestRepeatingDraftOrderAndMidDraftSurrender(t *testing.T) {
 	cases := []struct {
 		players int
 		want    []int
 	}{
-		{2, []int{0, 1, 1, 0, 0, 1, 1, 0}},
-		{3, []int{0, 1, 2, 2, 1, 0, 0, 1, 2, 2, 1, 0}},
-		{4, []int{0, 1, 2, 3, 3, 2, 1, 0, 0, 1, 2, 3, 3, 2, 1, 0}},
+		{2, []int{0, 1, 0, 1, 0, 1, 0, 1}},
+		{3, []int{0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2}},
+		{4, []int{0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3}},
 	}
 	for _, tc := range cases {
 		g := newGame("SNAKE")
@@ -211,16 +211,16 @@ func TestSnakeDraftOrderAndMidDraftSurrender(t *testing.T) {
 			g.draftOne()
 		}
 		if len(got) != len(tc.want) {
-			t.Fatalf("%dp snake draft length mismatch: got %v want %v", tc.players, got, tc.want)
+			t.Fatalf("%dp repeating draft length mismatch: got %v want %v", tc.players, got, tc.want)
 		}
 		for i := range got {
 			if got[i] != tc.want[i] {
-				t.Fatalf("%dp snake draft mismatch at pick %d: got %v want %v", tc.players, i, got, tc.want)
+				t.Fatalf("%dp repeating draft mismatch at pick %d: got %v want %v", tc.players, i, got, tc.want)
 			}
 		}
 	}
 
-	// Verify 4-player snake draft remains valid under mid-draft surrender at any pick & seat index.
+	// Verify 4-player repeating draft remains valid under mid-draft surrender at any pick & seat index.
 	for _, leaveSeat := range []int{0, 1, 3} {
 		for leaveAt := 0; leaveAt < 16; leaveAt++ {
 			g := newGame("SNKLV")
@@ -241,7 +241,7 @@ func TestSnakeDraftOrderAndMidDraftSurrender(t *testing.T) {
 				g.draftOne()
 			}
 			if g.Phase != "capital" {
-				t.Fatalf("4p snake draft stalled after leaveSeat=%d leaveAt=%d (phase=%s)", leaveSeat, leaveAt, g.Phase)
+				t.Fatalf("4p repeating draft stalled after leaveSeat=%d leaveAt=%d (phase=%s)", leaveSeat, leaveAt, g.Phase)
 			}
 			for _, p := range g.Players {
 				owned := 0

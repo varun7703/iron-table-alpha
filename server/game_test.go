@@ -378,14 +378,14 @@ func TestWeightedReinforceSectorCapAndPriorityAutoFeed(t *testing.T) {
 	if g.unit("tnk").Count != 10 || g.unit("tnk").Health != 60 {
 		t.Fatalf("Reinforce did not apply troop-weighted health: %+v", g.unit("tnk"))
 	}
-	// Sector cap of 4 separate stacks on recruit (2 already present -> 2 more allowed, 5th rejected).
-	for i := 0; i < 2; i++ {
+	// Sector cap of 6 separate stacks on recruit (2 already present -> 4 more allowed, 7th rejected).
+	for i := 0; i < 4; i++ {
 		if err := g.command(p.ID, Command{Action: "recruit", Type: "infantry", Count: 1, Target: 0}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := g.command(p.ID, Command{Action: "recruit", Type: "infantry", Count: 1, Target: 0}); err == nil {
-		t.Fatal("Accepted 5th separate army stack in one sector")
+		t.Fatal("Accepted 7th separate army stack in one sector")
 	}
 	// Priority autoFeed: with 15 food for 10 Infantry + 10 Tanks (leaving only those two), Tanks get 1.0 and Infantry gets 0.5 (0 starvation).
 	g.Units = g.Units[:2]

@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-func TestGatherHasDeadlineAndAdvancesOnLockOrTimeout(t *testing.T) {
+func TestGatherHasNoDeadlineAndAdvancesOnLock(t *testing.T) {
 	g := fixture()
 	g.Phase = "simulate"
 	g.advance()
-	if g.Phase != "gather" || g.Deadline <= time.Now().UnixMilli() {
-		t.Fatal("Gather must have an AFK deadline")
+	if g.Phase != "gather" || g.Deadline != 0 {
+		t.Fatal("Gather must have no deadline")
 	}
 	g.tick()
 	if g.Phase != "gather" {
-		t.Fatal("Gather advanced before deadline or locks")
+		t.Fatal("Gather advanced before locks")
 	}
 	for _, p := range g.Players {
 		if err := g.command(p.ID, Command{Action: "ready"}); err != nil {
@@ -36,8 +36,8 @@ func TestAllLocksSkipTimedPhases(t *testing.T) {
 	for _, p := range g.Players {
 		g.command(p.ID, Command{Action: "ready"})
 	}
-	if g.Phase != "gather" || g.Deadline <= time.Now().UnixMilli() {
-		t.Fatal("Simulation locks did not advance to timed Gather")
+	if g.Phase != "gather" || g.Deadline != 0 {
+		t.Fatal("Simulation locks did not advance to untimed Gather")
 	}
 }
 func TestEliminatedCommanderDoesNotBlock(t *testing.T) {

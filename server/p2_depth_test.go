@@ -206,61 +206,53 @@ func TestP2MeaningfulCapitalsIncomeDefenseAndVP(t *testing.T) {
 	}
 }
 
-func TestP2ArmySplitAndFourStackCap(t *testing.T) {
+func TestP2GatherOnlySplitAndSixStackCap(t *testing.T) {
 	g := fixture()
 	a := g.Players[0]
-	g.Units = []*Unit{
-		{ID: "u1", Owner: a.ID, Type: "infantry", Territory: 6, Count: 6, Health: 75, Ration: 0.5, Fed: false},
-	}
-
-	// 1. Split during Plan: clears existing order on u1, releases reserved currency, preserves Health & Ration.
+	g.Units = []*Unit{{ID: "u1", Owner: a.ID, Type: "infantry", Territory: 6, Count: 12, Health: 75, Ration: 0.5}}
 	if err := g.command(a.ID, Command{Action: "order", Unit: "u1", Kind: "move", Target: 12}); err != nil {
 		t.Fatal(err)
 	}
-	if g.reserved(a.ID, "") != 6 {
-		t.Fatalf("Expected reserved 6 before split, got %d", g.reserved(a.ID, ""))
+	if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 2}); err == nil {
+		t.Fatal("Allowed split during Plan")
 	}
-	if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 2}); err != nil {
-		t.Fatalf("Plan split failed: %v", err)
+	if len(g.Units) != 1 || g.Units[0].Count != 12 || g.reserved(a.ID, "") != 12 {
+		t.Fatal("Rejected Plan split mutated army or order")
 	}
-	if g.reserved(a.ID, "") != 0 || len(g.Orders) != 0 {
-		t.Fatalf("Plan split did not clear existing order / reserved currency: reserved=%d orders=%v", g.reserved(a.ID, ""), g.Orders)
-	}
-	if len(g.Units) != 2 || g.Units[0].Count != 4 || g.Units[1].Count != 2 {
-		t.Fatalf("Unexpected split counts: %+v %+v", g.Units[0], g.Units[1])
-	}
-	if g.Units[1].Health != 75 || g.Units[1].Ration != 0.5 || g.Units[1].Type != "infantry" {
-		t.Fatalf("Split unit did not inherit health/ration/type: %+v", g.Units[1])
-	}
-
-	// 2. Reject invalid split counts (0, negative, >= count).
-	if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 0}); err == nil {
-		t.Fatal("Accepted 0 split count")
-	}
-	if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 4}); err == nil {
-		t.Fatal("Accepted full-stack split count")
-	}
-
-	// 3. Enforce maxStacksPerSector (4) in Gather too, and reject splitting fed units in Gather.
 	g.Phase = "gather"
-	if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 1}); err != nil {
-		t.Fatalf("3rd stack split failed: %v", err)
+	g.Orders = map[string]Order{}
+	for _, count := range []int{0, -1, 12} {
+		if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: count}); err == nil {
+			t.Fatalf("Accepted invalid split count %d", count)
+		}
 	}
-	if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 1}); err != nil {
-		t.Fatalf("4th stack split failed: %v", err)
+	for i := 1; i < 6; i++ {
+		if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 1}); err != nil {
+			t.Fatalf("Split to stack %d failed: %v", i+1, err)
+		}
+	}
+	if len(g.Units) != 6 || g.Units[0].Count != 7 {
+		t.Fatal("Unexpected split counts")
+	}
+	for _, u := range g.Units {
+		if u.Health != 75 || u.Ration != 0.5 || u.Type != "infantry" {
+			t.Fatalf("Split changed stats: %+v", u)
+		}
 	}
 	if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 1}); err == nil {
-		t.Fatal("Allowed 5th stack beyond maxStacksPerSector=4")
+		t.Fatal("Allowed seventh stack via split")
 	}
-	// Merge two stacks back down to 3, feed u1, then confirm fed unit cannot split in Gather.
-	if err := g.command(a.ID, Command{Action: "merge", Unit: g.Units[2].ID, Other: g.Units[3].ID}); err != nil {
+	if err := g.command(a.ID, Command{Action: "recruit", Type: "infantry", Target: 6, Count: 1}); err == nil {
+		t.Fatal("Allowed seventh stack via recruit")
+	}
+	if err := g.command(a.ID, Command{Action: "merge", Unit: g.Units[4].ID, Other: g.Units[5].ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := g.command(a.ID, Command{Action: "feed", Unit: "u1", Ration: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if err := g.command(a.ID, Command{Action: "split", Unit: "u1", Count: 1}); err == nil {
-		t.Fatal("Allowed splitting a fed unit in Gather")
+		t.Fatal("Allowed splitting fed army")
 	}
 }
 
@@ -294,22 +286,36 @@ func TestP2CapitalAndGatherAFKTimers(t *testing.T) {
 		t.Fatalf("Bravo auto-assigned capital out of owned range: %d", b.Capital)
 	}
 
-	// Gather AFK timer (120s) auto-feeds and advances to Round 2 Plan.
+	// Gather has no deadline and waits for every active commander to lock in.
 	g.Phase = "simulate"
 	g.advance()
-	if g.Phase != "gather" || g.Deadline <= time.Now().UnixMilli() {
-		t.Fatalf("Expected 120s gather deadline, phase=%s deadline=%d", g.Phase, g.Deadline)
+	if g.Phase != "gather" || g.Deadline != 0 {
+		t.Fatalf("Gather must be untimed: phase=%s deadline=%d", g.Phase, g.Deadline)
 	}
-	g.Deadline = time.Now().Add(-time.Second).UnixMilli()
+	g.tick()
+	if g.Phase != "gather" {
+		t.Fatal("Gather advanced without lock-in")
+	}
+	if err := g.command(a.ID, Command{Action: "ready"}); err != nil {
+		t.Fatal(err)
+	}
+	g.tick()
+	if g.Phase != "gather" {
+		t.Fatal("Gather advanced before all players locked in")
+	}
+	if err := g.command(b.ID, Command{Action: "ready"}); err != nil {
+		t.Fatal(err)
+	}
 	g.tick()
 	if g.Phase != "plan" || g.Round != 2 {
-		t.Fatalf("Gather timeout did not auto-feed and advance to Round 2 Plan: phase=%s round=%d", g.Phase, g.Round)
+		t.Fatal("Gather did not advance after all players locked in")
 	}
 	for _, u := range g.Units {
 		if !u.Fed {
-			t.Fatalf("Unit not auto-fed on Gather timeout: %+v", u)
+			t.Fatalf("Unit not auto-fed on Gather completion: %+v", u)
 		}
 	}
+
 }
 
 func TestP2AdversarialHardeningRegressions(t *testing.T) {
