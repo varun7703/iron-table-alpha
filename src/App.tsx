@@ -483,7 +483,7 @@ export function App() {
         </div>
       )}
 
-      {help && <ManualModal onClose={() => setHelp(false)} />}
+      {help && <ManualModal phase={game?.phase} onClose={() => setHelp(false)} />}
 
       {!game ? (
         <LandingView

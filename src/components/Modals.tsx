@@ -1,5 +1,5 @@
 import React from 'react';
-import { CAPITAL_CURRENCY_BONUS, CAPITAL_HUMANS_BONUS, CAPITAL_VP, MAX_STACKS_PER_SECTOR } from '../combat';
+export { ManualModal } from './FieldManual';
 
 export function ExitModal({
   connected,
@@ -37,65 +37,6 @@ export function ExitModal({
             {exiting ? 'Leaving…' : 'Dissolve armies & exit'}
           </button>
         </div>
-      </section>
-    </div>
-  );
-}
-
-export function ManualModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div
-      className="modal-backdrop"
-      onKeyDown={e => {
-        if (e.key === 'Escape') onClose();
-      }}
-    >
-      <section className="manual" role="dialog" aria-modal="true" aria-labelledby="manual-title">
-        <button autoFocus className="close" onClick={onClose} aria-label="Close field manual">
-          ×
-        </button>
-        <span className="eyebrow">COMMANDER’S HANDBOOK</span>
-        <h2 id="manual-title">One map. Three phases.</h2>
-        <p>
-          Draft territories in repeating dice order (A → B → C → D → A → B → C → D). Every territory yields manpower and
-          currency, plus food or iron. Static terrain yields are always visible across the map.
-        </p>
-        <p>
-          <b>Capitals (45s selection):</b> rival picks stay concealed until Round 1 begins. Holding your own capital
-          grants <b>+{CAPITAL_CURRENCY_BONUS} currency</b> and <b>+{CAPITAL_HUMANS_BONUS} manpower</b> each Gather, plus{' '}
-          <b>+15% direct combat defense</b> in your capital (stacking to +38% with Hold &amp; defend). Each controlled
-          capital (yours or captured) awards <b>+{CAPITAL_VP} VP</b> at campaign end.
-        </p>
-        <p>
-          <b>Fog of War:</b> Plan reveals your territories and adjacent tiles. Simulate reveals the entire map.
-          Gather reveals only your territories. The Last Round report preserves the battles revealed during Simulate.
-        </p>
-        <p>
-          <b>Plan (90s):</b> one order per army. Friendly-sector transfers are free; attacking or claiming neutral
-          sectors costs 1 / 2 / 3 currency per infantry / artillery / tank. Artillery defaults to Bombard across one
-          border after movement (×1.5 vs tanks, ×1.2 vs infantry), unless overrun in melee. Hold &amp; defend entrenches
-          an army (+20% direct combat, −25% bombardment taken). Splitting is available only during Gather.
-        </p>
-        <p>
-          <b>Simulate:</b> border clashes resolve first, then movement, then artillery bombardment, then destination
-          battles and retreats. Durability is 10 / 14 / 20 HP per infantry / artillery / tank. Use the playback
-          scrubber to pause or step through frames, and check the Last Round tab during Gather or Plan.
-        </p>
-        <p>
-          <b>Gather (no timer):</b> income arrives automatically. Infantry costs 1 human + 4 currency; artillery 2 humans + 4
-          currency + 4 iron; tanks 3 humans + 8 currency + 8 iron. Merge, reinforce, or split unfed armies (max{' '}
-          {MAX_STACKS_PER_SECTOR} stacks per sector).
-        </p>
-        <p>
-          Minimum rations (0.5 food per troop, rounded up) give 65% attack. Normal rations maintain strength. Extra
-          rations (1.5, rounded up) heal 20 health. Unfed troops auto-feed when Gather advances; starvation costs 25
-          health and reduces attack to 30%.
-        </p>
-        <p>
-          After 20 rounds (or total conquest), highest <b>Victory Points (Territories + 2 × Capitals)</b> wins.
-          Disconnected commanders keep their seat for 5 minutes. Matches are held in server memory and reset if the
-          server restarts.
-        </p>
       </section>
     </div>
   );
