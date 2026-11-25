@@ -15,7 +15,7 @@ For frontend development, run `npm run dev` alongside the Go server. Vite proxie
 Create a room, invite another player or add bot commanders, and start. Server dice determine draft order. Claim territories in repeating order (`A → B → C → D → A → B → C → D`). Each claimed territory starts with four infantry.
 
 - **Plan (90s):** select an army and an adjacent destination. Friendly-sector transfers are free; attacks/neutral advances spend currency. Artillery defaults to Bombard across one border (firing after movement). Hold & defend entrenches the army (+20% direct combat, −25% bombardment taken). Lock when done; everyone ready ends the phase early.
-- **Simulate (at least 12s, 3s per frame):** all orders resolve within 1-hop Line of Sight. A playback scrubber lets you pause or step through frames while field dispatches highlight each engagement. All active commanders can lock in to skip the remaining playback.
+- **Simulate (at least 12s, 3s per frame):** all orders resolve with the full map revealed. A playback scrubber lets you pause or step through frames while field dispatches highlight each engagement. All active commanders can lock in to skip the remaining playback.
 - **Gather (no time limit):** territory income plus Capital HQ bonuses (+4 currency, +2 humans while held) are credited at entry. Recruit, reinforce, split, merge matching unfed armies (max 6 stacks per sector), and allocate rations. Review the Last Round report tab anytime. Unfed armies auto-feed when all commanders lock in (there is no Gather deadline).
 - Highest **Victory Points (`Territories + 2 × Capitals Controlled`)** after 20 rounds wins; ties break on territories then capitals. Owning the whole map also ends the campaign.
 
@@ -51,14 +51,14 @@ Combined-arms combat is deterministic: troop count × base attack × health frac
 
 - `server/game.go`: authoritative rules, generation, commands, timers, and combat.
 - `server/bot.go`: scored repeating-order drafting, capital selection, combined-arms Gather management, and threat-aware Plan orders.
-- `server/fog.go`: 1-hop Line-of-Sight visibility filtering across Plan, Simulate, and Gather, plus Last Round report filtering.
+- `server/fog.go`: phase-specific visibility: adjacent tiles in Plan, full map in Simulate, owned tiles in Gather.
 - `server/main.go`: HTTP/WebSocket lobby server and player-specific state filtering.
 - `src/`: modular React interface (`src/App.tsx`, `src/combat.ts`, `src/types.ts`, `src/components/*`), SVG territory/army assets, orders, playback scrubber, and recruitment/feeding controls.
 - Match state is **in memory**. Server restart loses lobbies; SQLite persistence is deferred.
 - Reconnect uses a private token in browser session storage. Refresh restores the same seat while the server remains running. A tab has its own session; use separate browsers/devices to play multiple humans.
 - Accepted command IDs are deduplicated within a connection. The client does not automatically replay mutations across reconnects; it requests a fresh authoritative state.
 - Server serializes mutations under a mutex. Independent lobby actors and horizontal scaling are deferred.
-- 1-hop Line of Sight applies across Plan, Simulate, and Gather: static terrain yields stay visible everywhere, while enemy ownership, capitals, units, orders, and simulation dispatches are only transmitted for sectors within 1 border of your territories or armies. Eliminated spectators and finished campaigns receive full visibility.
+- Plan reveals your territories and adjacent tiles; Simulate reveals all territories, armies, orders, and battle dispatches; Gather reveals only your territories. Static terrain yields remain visible everywhere. Last Round reports preserve the battles revealed in Simulate. Eliminated spectators and finished campaigns receive full visibility.
 - Bot commanders score contiguous/balanced drafts, recruit combined arms with currency and food reserves, heal wounded stacks, bombard armor/threats, entrench outnumbered fronts, and push rear armies forward.
 - No accounts, diplomacy, public matchmaking, map editor, audio, or database persistence yet.
 - Visual assets are original code-generated SVG/CSS. Fonts request Google Fonts with local fallbacks.

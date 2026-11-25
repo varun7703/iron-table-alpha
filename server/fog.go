@@ -3,7 +3,7 @@ package main
 import "strings"
 
 func (g *Game) fullVisibility(id string) bool {
-	if g.Phase == "lobby" || g.Phase == "roll" || g.Phase == "draft" || g.Phase == "capital" || g.Phase == "finished" {
+	if g.Phase == "lobby" || g.Phase == "roll" || g.Phase == "draft" || g.Phase == "capital" || g.Phase == "simulate" || g.Phase == "finished" {
 		return true
 	}
 	if id == "" || g.eliminated(id) {
@@ -22,9 +22,7 @@ func (g *Game) markOneHop(vis map[int]bool, tid int) {
 	}
 }
 
-// visibleSectors returns the set of territory IDs currently within 1-hop LoS
-// of player id (owned sectors, sectors containing living units of id, and all
-// immediate neighbors).
+// Plan reveals owned sectors and their neighbors; Gather reveals owned sectors only.
 func (g *Game) visibleSectors(id string) map[int]bool {
 	vis := make(map[int]bool, len(g.Territories))
 	if g.fullVisibility(id) {
@@ -35,43 +33,21 @@ func (g *Game) visibleSectors(id string) map[int]bool {
 	}
 	for _, t := range g.Territories {
 		if t.Owner == id {
-			g.markOneHop(vis, t.ID)
-		}
-	}
-	for _, u := range g.Units {
-		if u.Owner == id && u.Count > 0 {
-			g.markOneHop(vis, u.Territory)
+			vis[t.ID] = true
+			if g.Phase == "plan" {
+				g.markOneHop(vis, t.ID)
+			}
 		}
 	}
 	return vis
 }
 
-// simulateVisibleSectors computes the union of 1-hop LoS across all frames of
-// the current simulation timeline so a commander sees every engagement and
-// border around sectors they owned or fought in during resolution, without
-// leaking distant battles across the continent.
+// Simulate reveals the entire map, including the Last Round report retained afterward.
+// This also runs while resolving Plan, before the phase changes to Simulate.
 func (g *Game) simulateVisibleSectors(id string) map[int]bool {
 	vis := make(map[int]bool, len(g.Territories))
-	if g.fullVisibility(id) {
-		for i := range g.Territories {
-			vis[i] = true
-		}
-		return vis
-	}
-	for _, f := range g.Timeline {
-		for tid, owner := range f.Owners {
-			if owner == id {
-				g.markOneHop(vis, tid)
-			}
-		}
-		for _, u := range f.Units {
-			if u.Owner == id && u.Count > 0 {
-				g.markOneHop(vis, u.Territory)
-			}
-		}
-	}
-	if len(g.Timeline) == 0 {
-		return g.visibleSectors(id)
+	for i := range g.Territories {
+		vis[i] = true
 	}
 	return vis
 }

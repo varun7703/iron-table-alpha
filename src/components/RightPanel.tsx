@@ -397,7 +397,9 @@ export function RightPanel({
             <p className="muted">
               {territory.visible
                 ? 'No armies stationed here.'
-                : 'Sector is beyond 1-hop reconnaissance. Move adjacent to scout garrisons.'}
+                : phase === 'gather'
+                  ? 'Only your territories are visible during Gather.'
+                  : 'Sector is beyond adjacent-tile visibility. Capture a neighboring territory to scout it.'}
             </p>
           )}
 

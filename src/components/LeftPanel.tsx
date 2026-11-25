@@ -158,11 +158,13 @@ export function LeftPanel({
             ? phase === 'capital'
               ? 'All drafted sectors are visible. Rival capital selections stay secret until Round 1.'
               : 'The full continent is visible.'
-            : '1-hop Line of Sight active. Static terrain yields stay visible; rival armies, ownership, and dispatches appear within 1 border.'}
+            : phase === 'gather'
+              ? 'Only your territories are visible during Gather. Static terrain yields remain visible across the map.'
+              : 'Your territories and adjacent tiles are visible during Plan. Static terrain yields remain visible across the map.'}
         </p>
         <div className="visibility">
           <span className="live-dot" />
-          {full ? 'FULL MAP VISIBILITY' : '1-HOP LINE OF SIGHT'}
+          {full ? 'FULL MAP VISIBILITY' : phase === 'gather' ? 'OWN TERRITORIES ONLY' : 'ADJACENT TILE VISIBILITY'}
         </div>
       </div>
     </aside>

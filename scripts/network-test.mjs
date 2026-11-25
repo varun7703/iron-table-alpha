@@ -140,7 +140,7 @@ try {
   assert.equal(Object.keys(b.game.orders).length, 0);
   await assert.rejects(() => b.command('order', { unit: u.id, kind: 'move', target }), /own army/);
 
-  // Simulate phase: 1-hop LoS timeline & events
+  // Simulate phase: full map, timeline and events
   await a.command('ready');
   await b.command('ready');
   await Promise.all([a.wait(() => a.game.phase === 'simulate'), b.wait(() => b.game.phase === 'simulate')]);
@@ -149,11 +149,8 @@ try {
   assert.equal(a.game.timeline[0].units.find(v => v.id === u.id).territory, u.territory);
   assert.deepEqual(a.game.timeline.at(-1).units, a.game.units);
   assert(a.game.simulationDuration >= a.game.timeline.length * 3000);
-  // Distant enemy units (Bravo's opposite corner) must not leak into Alpha's Simulate view
-  assert(
-    a.game.units.every(v => v.owner === a.session.player || a.game.territories[v.territory].visible),
-    'Simulate leaked unit outside 1-hop LoS',
-  );
+  assert(a.game.territories.every(t => t.visible), 'Simulate must reveal the full map');
+  assert(a.game.units.some(v => v.owner === b.session.player), 'Simulate must reveal distant enemy armies');
 
   // Gather phase: untimed lock-in, Capital HQ income (+4 currency, +2 humans), lastEvents, recruit, feed, dedup
   const preGatherCurrency = a.game.players.find(p => p.id === a.session.player).resources.currency;
@@ -162,6 +159,8 @@ try {
   await b.command('ready');
   await Promise.all([a.wait(() => a.game.phase === 'gather'), b.wait(() => b.game.phase === 'gather')]);
   assert.equal(a.game.deadline, 0, 'Gather phase must have no deadline');
+  assert(a.game.territories.every(t => t.visible === (t.owner === a.session.player)), 'Gather must reveal only owned tiles');
+  assert(a.game.units.every(u => u.owner === a.session.player), 'Gather exposed an enemy army');
   assert.equal(a.game.simulationDuration, 0, 'simulationDuration must reset to 0 after simulate');
   const postGatherCurrency = a.game.players.find(p => p.id === a.session.player).resources.currency;
   assert.equal(
@@ -240,7 +239,7 @@ try {
   await reconnect.wait(() => reconnect.messages.some(m => m.type === 'left'));
 
   console.log(
-    'PASS: two-player lobby, repeating draft, concealed timed capitals, 1-hop LoS across Plan/Simulate/Gather, Army Split, Capital HQ income, Last Round report, untimed Gather, deduplication, 5m reconnect grace, and surrender.',
+    'PASS: two-player lobby, repeating draft, concealed timed capitals, phase-specific fog of war, Army Split, Capital HQ income, Last Round report, untimed Gather, deduplication, 5m reconnect grace, and surrender.',
   );
 } finally {
   a.close();

@@ -10,6 +10,7 @@ import { ExitModal, ManualModal } from './components/Modals';
 import { RightPanel } from './components/RightPanel';
 import { TopBar } from './components/TopBar';
 import { websocketURL } from './connection';
+import posthog, { isPosthogEnabled, posthogGameLogger } from './posthog';
 import type { Game, Territory, Unit } from './types';
 
 function readStoredSession(): { code: string; player: string; token: string } | null {
@@ -61,8 +62,18 @@ export function App() {
   const playbackOrigin = useRef<{ progress: number; time: number } | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const session = useRef<{ code: string; player: string; token: string } | null>(readStoredSession());
+  const identifiedPlayer = useRef<string | null>(null);
+
+  function identifyPlayer(playerId: string) {
+    if (!isPosthogEnabled || !playerId || identifiedPlayer.current === playerId) return;
+    if (identifiedPlayer.current) posthog.reset();
+    posthog.identify(playerId);
+    identifiedPlayer.current = playerId;
+  }
 
   function resetClientSession(clearError: boolean) {
+    if (isPosthogEnabled) posthog.reset();
+    identifiedPlayer.current = null;
     session.current = null;
     try {
       sessionStorage.removeItem('iron-session');
@@ -86,6 +97,40 @@ export function App() {
     if (clearError) setError('');
   }
 
+  function captureGameAction(action: string, data: Record<string, unknown>) {
+    if (!isPosthogEnabled) return;
+
+    switch (action) {
+      case 'create':
+        posthog.capture('game_create_requested');
+        break;
+      case 'join':
+        posthog.capture('game_join_requested');
+        break;
+      case 'ready':
+      case 'unready':
+        posthog.capture('player_readiness_changed', { is_ready: action === 'ready' });
+        break;
+      case 'addBot':
+        posthog.capture('bot_player_added');
+        break;
+      case 'start':
+        posthog.capture('game_start_requested');
+        break;
+      case 'claim':
+        posthog.capture('territory_claimed');
+        break;
+      case 'order':
+        if (typeof data.kind === 'string') {
+          posthog.capture('unit_order_submitted', { order_kind: data.kind });
+        }
+        break;
+      case 'leave':
+        posthog.capture('game_leave_requested');
+        break;
+    }
+  }
+
   function send(action: string, data: Record<string, unknown> = {}) {
     if (socket.current?.readyState !== WebSocket.OPEN) {
       setError('Connecting to the command server…');
@@ -97,6 +142,7 @@ export function App() {
       exitCommand.current = id;
       setExiting(true);
     }
+    captureGameAction(action, data);
     socket.current.send(JSON.stringify({ id, action, ...data }));
   }
 
@@ -118,6 +164,7 @@ export function App() {
         attempt = 0;
         setDisconnectStarted(0);
         setConnected(true);
+        posthogGameLogger.info('game websocket connected', { reconnect: Boolean(session.current) });
         if (session.current) {
           ws.send(JSON.stringify({ id: crypto.randomUUID(), action: 'resume', ...session.current }));
         }
@@ -134,12 +181,18 @@ export function App() {
           resetClientSession(true);
         }
         if (m.type === 'session') {
+          if (session.current?.player && session.current.player !== m.player && isPosthogEnabled) {
+            posthog.reset();
+            identifiedPlayer.current = null;
+          }
           session.current = { code: m.code, player: m.player, token: m.token };
           try {
             sessionStorage.setItem('iron-session', JSON.stringify(session.current));
           } catch {
             // ignore storage quota errors
           }
+          identifyPlayer(m.player);
+          posthogGameLogger.info('game session confirmed');
           setPlayer(m.player);
         }
         if (m.type === 'error') {
@@ -153,7 +206,13 @@ export function App() {
           }
         }
       };
-      ws.onclose = () => {
+      ws.onclose = event => {
+        if (!stopped) {
+          posthogGameLogger.warn('game websocket closed', {
+            close_code: event.code,
+            had_active_session: Boolean(session.current),
+          });
+        }
         if (session.current) setDisconnectStarted(start => start || Date.now());
         setConnected(false);
         setExiting(false);
@@ -275,7 +334,7 @@ export function App() {
   const unit = displayUnits.find(u => u.id === army);
   const phase = game?.phase || 'lobby';
   const seconds = game?.deadline ? Math.max(0, Math.ceil((game.deadline - now) / 1000)) : 0;
-  const full = ['draft', 'lobby', 'roll', 'capital', 'finished'].includes(phase) || Boolean(me?.eliminated);
+  const full = ['draft', 'lobby', 'roll', 'capital', 'simulate', 'finished'].includes(phase) || Boolean(me?.eliminated);
   const locked = Boolean(me?.ready || me?.eliminated || !connected);
   const activePlayers = game?.players.filter(p => !p.eliminated) || [];
   const readyCount = activePlayers.filter(p => p.ready).length;
@@ -373,6 +432,7 @@ export function App() {
     }
     promise
       .then(() => {
+        if (isPosthogEnabled) posthog.capture('game_code_copied');
         setCopied(true);
         if (copyTimer.current) clearTimeout(copyTimer.current);
         copyTimer.current = setTimeout(() => setCopied(false), 1800);

@@ -7,119 +7,102 @@ import (
 	"time"
 )
 
-func TestP2OneHopFogInSimulateCapitalAndLastEvents(t *testing.T) {
+func TestPhaseSpecificFogOfWar(t *testing.T) {
 	g := fixture()
 	a, b := g.Players[0], g.Players[1]
-	// Alpha owns 0..11, Bravo owns 12..23.
-	// Sector 6 borders 12 (visible to Alpha). Sector 23 is 2+ hops from Alpha (fogged).
-	a.Capital = 0
-	b.Capital = 23
-
-	// 1. Capital phase conceals rival capital picks until Round 1 starts.
-	g.Phase = "capital"
-	psCap := g.view(a.ID)["players"].([]Player)
-	if psCap[0].Capital != 0 || psCap[1].Capital != -1 {
-		t.Fatalf("Capital phase must show own capital and conceal rival capital: %+v", psCap)
-	}
-
-	// 2. Plan phase: rival capital outside 1-hop LoS stays hidden, distant tile hides Owner & Neutral but keeps static Yield.
-	g.Phase = "plan"
-	g.Territories[23].Owner = "" // distant neutral tile
-	g.Territories[12].Owner = b.ID
-	b.Capital = 22 // still 2 hops away from Alpha
-	vPlan := g.view(a.ID)
-	tsPlan := vPlan["territories"].([]Territory)
-	if tsPlan[23].Visible || tsPlan[23].Neutral || tsPlan[23].Owner != "" || tsPlan[23].Yield == 0 {
-		t.Fatalf("Distant neutral must hide Neutral/Owner while preserving static Yield: %+v", tsPlan[23])
-	}
-	psPlan := vPlan["players"].([]Player)
-	if psPlan[1].Capital != -1 {
-		t.Fatalf("Rival capital outside 1-hop LoS leaked: %d", psPlan[1].Capital)
-	}
-	// Move rival capital onto 1-hop adjacent sector 12 -> now scouted!
-	b.Capital = 12
-	psScouted := g.view(a.ID)["players"].([]Player)
-	if psScouted[1].Capital != 12 {
-		t.Fatalf("Scouted rival capital on 1-hop sector should be visible, got %d", psScouted[1].Capital)
-	}
-
-	// 3. Simulate phase: distant battle/capture at 22->23 must NOT leak units, orders, events, or frame sector names to Alpha.
-	g.Territories[23].Owner = ""
+	a.Capital, b.Capital = 0, 23
 	g.Units = []*Unit{
-		{ID: "aFront", Owner: a.ID, Type: "infantry", Territory: 6, Count: 4, Health: 100, Ration: 1},
-		{ID: "bFront", Owner: b.ID, Type: "infantry", Territory: 12, Count: 4, Health: 100, Ration: 1},
-		{ID: "bFar", Owner: b.ID, Type: "tank", Territory: 22, Count: 3, Health: 100, Ration: 1},
+		{ID: "own", Owner: a.ID, Type: "infantry", Territory: 6, Count: 4, Health: 100, Ration: 1},
+		{ID: "near", Owner: b.ID, Type: "infantry", Territory: 12, Count: 4, Health: 100, Ration: 1},
+		{ID: "far", Owner: b.ID, Type: "tank", Territory: 22, Count: 3, Health: 100, Ration: 1},
 	}
-	g.Orders["aFront"] = Order{"aFront", "move", 12}
-	g.Orders["bFar"] = Order{"bFar", "move", 23}
-	g.resolve()
-	g.setPhase("simulate", 15)
-
-	vSimA := g.view(a.ID)
-	simOrdersA := vSimA["orders"].(map[string]Order)
-	if _, leaked := simOrdersA["bFar"]; leaked {
-		t.Fatal("Distant enemy order leaked during Simulate")
+	g.Phase = "capital"
+	if g.view(a.ID)["players"].([]Player)[1].Capital != -1 {
+		t.Fatal("Rival capital pick exposed during setup")
 	}
-	if _, ok := simOrdersA["aFront"]; !ok {
-		t.Fatal("Own order missing during Simulate")
+	g.Phase = "plan"
+	plan := g.view(a.ID)
+	tiles := plan["territories"].([]Territory)
+	if !tiles[6].Visible || !tiles[12].Visible || tiles[23].Visible {
+		t.Fatal("Plan must reveal own and adjacent tiles only")
 	}
-	simEventsA := vSimA["events"].([]Event)
-	for _, ev := range simEventsA {
-		if ev.To == 23 || ev.From == 22 {
-			t.Fatalf("Distant event leaked to Alpha during Simulate: %+v", ev)
-		}
+	if len(plan["units"].([]*Unit)) != 2 {
+		t.Fatal("Plan must show adjacent army and hide distant army")
 	}
-	simTimelineA := vSimA["timeline"].([]BattleFrame)
-	farName := g.Territories[23].Name
-	for _, fr := range simTimelineA {
-		if strings.Contains(fr.Label, farName) {
-			t.Fatalf("Distant sector name leaked in Simulate frame label: %q", fr.Label)
-		}
-		for _, u := range fr.Units {
-			if u.ID == "bFar" {
-				t.Fatalf("Distant unit leaked in Simulate frame %q", fr.Label)
+	if plan["players"].([]Player)[1].Capital != -1 {
+		t.Fatal("Plan exposed distant capital")
+	}
+	// Every player's view uses its own territory boundary.
+	for _, p := range g.Players {
+		expected := map[int]bool{}
+		for _, tile := range g.Territories {
+			if tile.Owner == p.ID {
+				g.markOneHop(expected, tile.ID)
 			}
 		}
-		if fr.Owners[23] != "" {
-			t.Fatalf("Distant owner leaked in Simulate frame %q: %s", fr.Label, fr.Owners[23])
+		for _, tile := range g.view(p.ID)["territories"].([]Territory) {
+			if tile.Visible != expected[tile.ID] {
+				t.Fatalf("Plan visibility mismatch for %s sector %d", p.Name, tile.ID)
+			}
 		}
 	}
-	// Bravo DOES see its own distant capture at 23.
-	vSimB := g.view(b.ID)
-	foundFarCapture := false
-	for _, ev := range vSimB["events"].([]Event) {
-		if ev.To == 23 && ev.Kind == "capture" {
-			foundFarCapture = true
+	g.Territories[23].Owner = ""
+	g.Orders["far"] = Order{"far", "move", 23}
+	g.resolve()
+	g.setPhase("simulate", simulateDurationSeconds)
+	sim := g.view(a.ID)
+	for _, tile := range sim["territories"].([]Territory) {
+		if !tile.Visible {
+			t.Fatal("Simulate hid a tile")
 		}
 	}
-	if !foundFarCapture {
-		t.Fatal("Bravo missing its own capture event at sector 23")
+	if len(sim["units"].([]*Unit)) != len(g.Units) {
+		t.Fatal("Simulate hid armies")
 	}
-
-	// 4. Advance to Gather -> Alpha's lastEvents contains local battle but NOT distant capture.
+	if _, ok := sim["orders"].(map[string]Order)["far"]; !ok {
+		t.Fatal("Simulate hid a distant order")
+	}
+	if len(sim["timeline"].([]BattleFrame)) != len(g.Timeline) {
+		t.Fatal("Simulate omitted battle frames")
+	}
+	if len(sim["events"].([]Event)) != len(g.Events) {
+		t.Fatal("Simulate omitted battle events")
+	}
+	if sim["players"].([]Player)[1].Capital != 23 {
+		t.Fatal("Simulate hid distant capital")
+	}
 	g.advance()
-	if g.Phase != "gather" {
-		t.Fatalf("Expected gather, got %s", g.Phase)
-	}
-	lastA := g.view(a.ID)["lastEvents"].([]Event)
-	if len(lastA) == 0 {
-		t.Fatal("Expected local lastEvents preserved in Gather")
-	}
-	for _, ev := range lastA {
-		if ev.To == 23 || ev.From == 22 {
-			t.Fatalf("Distant event leaked into Alpha lastEvents: %+v", ev)
+	for _, p := range g.Players {
+		gather := g.view(p.ID)
+		for _, tile := range gather["territories"].([]Territory) {
+			if tile.Visible != (g.Territories[tile.ID].Owner == p.ID) {
+				t.Fatalf("Gather visibility mismatch for %s sector %d", p.Name, tile.ID)
+			}
+			if !tile.Visible && (tile.Owner != "" || tile.IsCapital || tile.Neutral) {
+				t.Fatal("Gather exposed hidden territory details")
+			}
+		}
+		for _, u := range gather["units"].([]*Unit) {
+			if u.Owner != p.ID {
+				t.Fatal("Gather exposed enemy army")
+			}
+		}
+		if len(gather["lastEvents"].([]Event)) != len(g.LastEvents) {
+			t.Fatal("Last Round report lost a battle revealed in Simulate")
+		}
+		if len(gather["timeline"].([]BattleFrame)) != 0 {
+			t.Fatal("Gather retained live replay")
 		}
 	}
-
-	// 5. Eliminated spectator gets full visibility.
-	spec := g.addPlayer("Spectator", false)
-	if !g.eliminated(spec.ID) {
-		t.Fatal("Expected spectator to be eliminated")
+	// Returning to Plan restores adjacent visibility after Gather.
+	g.Phase = "plan"
+	if !g.view(a.ID)["territories"].([]Territory)[12].Visible {
+		t.Fatal("Plan did not restore adjacent visibility")
 	}
-	tsSpec := g.view(spec.ID)["territories"].([]Territory)
-	for _, tr := range tsSpec {
-		if !tr.Visible {
-			t.Fatalf("Eliminated spectator must see all sectors, sector %d fogged", tr.ID)
+	spec := g.addPlayer("Spectator", false)
+	for _, tile := range g.view(spec.ID)["territories"].([]Territory) {
+		if !tile.Visible {
+			t.Fatal("Eliminated spectator must see full map")
 		}
 	}
 }
@@ -319,8 +302,7 @@ func TestP2CapitalAndGatherAFKTimers(t *testing.T) {
 }
 
 func TestP2AdversarialHardeningRegressions(t *testing.T) {
-	// 1. Zero side-channel leak: distant captures produce NO extra frames or simulationDuration bump,
-	// and moving into fog must NOT mark a unit as Destroyed.
+	// 1. Simulate includes distant captures; movement must not be marked as destruction.
 	g := fixture()
 	a, b := g.Players[0], g.Players[1]
 	// Alpha owns 0..11; Bravo owns 12..17; 18..23 neutral (2+ hops from Alpha).
@@ -341,12 +323,12 @@ func TestP2AdversarialHardeningRegressions(t *testing.T) {
 
 	vA := g.view(a.ID)
 	tlA := vA["timeline"].([]BattleFrame)
-	// Alpha had 0 visible territory resolutions -> strictly 5 base frames, simulationDuration = 15000.
-	if len(tlA) != 5 {
-		t.Fatalf("Distant captures leaked extra timeline frames to Alpha: got %d frames", len(tlA))
+	// All simulation frames are visible, including distant captures.
+	if len(tlA) != len(g.Timeline) {
+		t.Fatal("Simulate omitted distant frames")
 	}
-	if vA["simulationDuration"].(int) != 15000 {
-		t.Fatalf("simulationDuration leaked distant frames: got %d", vA["simulationDuration"])
+	if vA["simulationDuration"].(int) != max(12, len(g.Timeline)*3)*1000 {
+		t.Fatal("Playback duration does not match full timeline")
 	}
 	for _, fr := range tlA {
 		for _, deadID := range fr.Destroyed {

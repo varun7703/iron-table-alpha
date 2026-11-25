@@ -14,7 +14,7 @@ const PHASE_INFO: Record<string, [string, string]> = {
   plan: ['Make your next move', 'Select an army, then an adjacent territory. Artillery defaults to Bombard.'],
   simulate: [
     'The battlefield is revealed',
-    'Orders resolve together within 1-hop Line of Sight. Pause or scrub any step.',
+    'Orders resolve together with the full map revealed. Pause or scrub any step.',
   ],
   gather: ['Rebuild. Replenish. Prepare.', 'Income collected. Lock in when ready. Recruit, split, merge, and allocate rations.'],
   finished: ['The campaign has ended', 'Victory Points (Territories + 2 × Capitals) decide the victor.'],

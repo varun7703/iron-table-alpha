@@ -100,8 +100,8 @@ func TestFogDoesNotLeak(t *testing.T) {
 	}
 	g.Phase = "simulate"
 	simUs := g.view(a.ID)["units"].([]*Unit)
-	if len(simUs) != 1 || simUs[0].ID != "adj" {
-		t.Fatalf("Simulation should apply 1-hop LoS (expected only adj), got %d", len(simUs))
+	if len(simUs) != 2 {
+		t.Fatalf("Simulation must reveal both adjacent and distant armies, got %d", len(simUs))
 	}
 }
 func TestMergeAndFeed(t *testing.T) {

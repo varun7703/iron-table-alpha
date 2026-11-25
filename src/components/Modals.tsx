@@ -67,8 +67,8 @@ export function ManualModal({ onClose }: { onClose: () => void }) {
           capital (yours or captured) awards <b>+{CAPITAL_VP} VP</b> at campaign end.
         </p>
         <p>
-          <b>1-Hop Line of Sight:</b> you see ownership, capitals, garrisons, and battle dispatches on sectors you hold
-          and all sectors sharing a border with your territory or armies — across Plan, Simulate, and Gather.
+          <b>Fog of War:</b> Plan reveals your territories and adjacent tiles. Simulate reveals the entire map.
+          Gather reveals only your territories. The Last Round report preserves the battles revealed during Simulate.
         </p>
         <p>
           <b>Plan (90s):</b> one order per army. Friendly-sector transfers are free; attacking or claiming neutral
